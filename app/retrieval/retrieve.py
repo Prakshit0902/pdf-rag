@@ -31,6 +31,7 @@ def vector_search(
         payload = result.payload
 
         payload["vector_score"] = result.score
+        payload["id"] = str(result.id)
 
         chunks.append(payload)
 

@@ -17,13 +17,21 @@ def build_context(chunks):
         score = round(chunk["score"], 4)
 
         context = f"""
-SOURCE: {source}
-PAGE: {page}
-RELEVANCE: {score}
+        CHUNK_ID: {chunk["retrieval_id"]}
 
-CONTENT:
-{text}
-"""
+        SOURCE_FILE: {source}
+
+        PAGE: {page}
+
+        VECTOR_SCORE: {round(chunk.get("vector_score", 0), 4)}
+
+        BM25_SCORE: {round(chunk.get("bm25_score", 0), 4)}
+
+        RERANK_SCORE: {round(chunk.get("rerank_score", 0), 4)}
+
+        CONTENT:
+        {text}
+        """
 
         context_parts.append(context)
 
@@ -57,26 +65,28 @@ def ask_question(question: str):
     page_renders = list(set(page_renders))
 
     prompt = f"""
-You are a highly accurate multimodal document QA system.
+        You are a highly accurate multimodal document QA system.
 
-Answer ONLY from the provided context and images.
+        Answer ONLY from the provided context and images.
 
-If the answer is not present,
-say:
-"I could not find this in the documents."
+        If the answer is not present,
+        say:
+        "I could not find this in the documents."
 
-Always:
-- cite source file names
-- mention page numbers if available
-- use image evidence when relevant
-- avoid hallucinations
+        Always:
+        - cite SOURCE_FILE
+        - cite PAGE
+        - cite CHUNK_ID
+        - mention when evidence is weak
+        - avoid unsupported claims
+        - avoid hallucinations
 
-QUESTION:
-{question}
+        QUESTION:
+        {question}
 
-CONTEXT:
-{context}
-"""
+        CONTEXT:
+        {context}
+        """
 
     answer = generate_answer(
         prompt,
@@ -86,5 +96,29 @@ CONTEXT:
     return {
         "question": question,
         "answer": answer,
-        "retrieved_chunks": chunks
+
+        "retrieved_chunks": [
+            {
+                "chunk_id": c["retrieval_id"],
+
+                "source_file": c["source_file"],
+
+                "page": c["page"],
+
+                "vector_score": c.get(
+                    "vector_score"
+                ),
+
+                "bm25_score": c.get(
+                    "bm25_score"
+                ),
+
+                "rerank_score": c.get(
+                    "rerank_score"
+                ),
+
+                "preview": c["text"][:300]
+            }
+            for c in chunks
+        ]
     }
