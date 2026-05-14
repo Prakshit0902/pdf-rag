@@ -15,6 +15,10 @@ def main():
         result = ask_question(question)
 
         print("\n====================\n")
+        print(
+            f"\nRewritten Query: "
+            f"{result['rewritten_question']}"
+        )
         print(result["answer"])
 
         print("\n\n========== SOURCES ==========\n")

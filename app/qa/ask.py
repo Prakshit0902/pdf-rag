@@ -1,5 +1,8 @@
 from app.retrieval.retrieve import retrieve_chunks
 from app.llm.gemini import generate_answer
+from app.memory.memory import (add_message)
+
+from app.qa.query_rewriter import (rewrite_query)
 
 
 def build_context(chunks):
@@ -41,8 +44,10 @@ def build_context(chunks):
 
 
 def ask_question(question: str):
-
-    chunks = retrieve_chunks(question)
+    rewritten_question = rewrite_query(
+        question
+    )
+    chunks = retrieve_chunks(rewritten_question)
 
     context = build_context(chunks)
 
@@ -81,8 +86,11 @@ def ask_question(question: str):
         - avoid unsupported claims
         - avoid hallucinations
 
-        QUESTION:
+        ORIGINAL QUESTION:
         {question}
+
+        REWRITTEN QUESTION:
+        {rewritten_question}
 
         CONTEXT:
         {context}
@@ -91,6 +99,16 @@ def ask_question(question: str):
     answer = generate_answer(
         prompt,
         image_paths=image_paths + page_renders
+    )
+    
+    add_message(
+        "user",
+        question
+    )
+
+    add_message(
+        "assistant",
+        answer
     )
 
     return {
@@ -117,7 +135,8 @@ def ask_question(question: str):
                     "rerank_score"
                 ),
 
-                "preview": c["text"][:300]
+                "preview": c["text"][:300],
+                "rewritten_question": rewritten_question
             }
             for c in chunks
         ]

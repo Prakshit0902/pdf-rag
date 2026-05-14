@@ -36,6 +36,8 @@ def build_chunks(
         semantic_chunks = split_text_into_chunks(
             text
         )
+        
+        total_chunks = len(semantic_chunks)
 
         for semantic_chunk in semantic_chunks:
             if len(semantic_chunk.split()) < 30:
@@ -70,6 +72,11 @@ def build_chunks(
                 "page_render": page_render_map.get(page),
                 
                 "metadata": doc.metadata,
+                "parent_doc_id": pdf_filename,
+
+                "parent_chunk_index": chunk_index,
+
+                "total_parent_chunks": total_chunks,
             }
 
             chunks.append(chunk)

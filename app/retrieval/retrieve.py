@@ -4,6 +4,7 @@ from app.vectorstore.qdrant_client import client
 
 from app.retrieval.reranker import rerank_chunks
 from app.retrieval.bm25_index import bm25_search
+from app.retrieval.parent_retrieval import expand_parent_context
 
 
 COLLECTION_NAME = "pdf_rag"
@@ -80,4 +81,9 @@ def retrieve_chunks(
         top_k=rerank_top_k
     )
 
-    return reranked_chunks
+    expanded_chunks = expand_parent_context(
+        reranked_chunks,
+        window_size=1
+    )
+    
+    return expanded_chunks
