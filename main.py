@@ -45,6 +45,12 @@ def main():
         ----------------------------
         """
             )
+            
+        print("\n========== EVALUATION ==========\n")
+
+        print(
+            result["evaluation"]
+        )
 
         print("\n====================\n")
 

@@ -33,11 +33,10 @@ def generate_answer(
                 contents.append(image)
 
             except Exception:
-
                 pass
 
     response = client.models.generate_content(
-        model="gemini-2.5-pro",
+        model="gemini-3.1-flash-lite",
 
         contents=contents,
 
@@ -47,3 +46,40 @@ def generate_answer(
     )
 
     return response.text
+
+
+def stream_answer(
+    prompt: str,
+    image_paths: list = None
+):
+
+    contents = [prompt]
+
+    if image_paths:
+
+        for path in image_paths[:5]:
+
+            try:
+
+                image = Image.open(path)
+
+                contents.append(image)
+
+            except Exception:
+                pass
+
+    response = client.models.generate_content_stream(
+        model="gemini-3.1-flash-lite",
+
+        contents=contents,
+
+        config=types.GenerateContentConfig(
+            temperature=0.2,
+        ),
+    )
+
+    for chunk in response:
+
+        if chunk.text:
+
+            yield chunk.text

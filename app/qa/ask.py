@@ -3,6 +3,7 @@ from app.llm.gemini import generate_answer
 from app.memory.memory import (add_message)
 
 from app.qa.query_rewriter import (rewrite_query)
+from app.eval.evaluator import evaluate_answer
 
 
 def build_context(chunks):
@@ -10,6 +11,7 @@ def build_context(chunks):
     context_parts = []
 
     for index, chunk in enumerate(chunks):
+        # print(f"Processing chunk {index}: {chunk}")
 
         text = chunk["text"]
 
@@ -17,10 +19,8 @@ def build_context(chunks):
 
         page = chunk.get("page")
 
-        score = round(chunk["score"], 4)
-
         context = f"""
-        CHUNK_ID: {chunk["retrieval_id"]}
+        CHUNK_ID: {chunk["id"]}
 
         SOURCE_FILE: {source}
 
@@ -110,14 +110,17 @@ def ask_question(question: str):
         "assistant",
         answer
     )
+    
+    evaluation = evaluate_answer(question, answer, chunks)
 
     return {
         "question": question,
         "answer": answer,
+        "evaluation": evaluation,
 
         "retrieved_chunks": [
             {
-                "chunk_id": c["retrieval_id"],
+                "chunk_id": c["id"],
 
                 "source_file": c["source_file"],
 
@@ -136,7 +139,8 @@ def ask_question(question: str):
                 ),
 
                 "preview": c["text"][:300],
-                "rewritten_question": rewritten_question
+                "rewritten_question": rewritten_question,
+                
             }
             for c in chunks
         ]
