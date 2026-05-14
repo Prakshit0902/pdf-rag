@@ -1,5 +1,6 @@
 from app.embeddings.embedder import get_embedding
 from app.vectorstore.qdrant_client import client
+from app.retrieval.reranker import rerank_chunks
 
 
 COLLECTION_NAME = "pdf_rag"
@@ -7,7 +8,8 @@ COLLECTION_NAME = "pdf_rag"
 
 def retrieve_chunks(
     query: str,
-    limit: int = 5
+    limit: int = 10,
+    rerank_top_k: int = 5
 ):
 
     query_embedding = get_embedding(query)
@@ -30,4 +32,10 @@ def retrieve_chunks(
 
         retrieved_chunks.append(payload)
 
-    return retrieved_chunks
+    reranked_chunks = rerank_chunks(
+        query,
+        retrieved_chunks,
+        top_k=rerank_top_k
+    )
+
+    return reranked_chunks

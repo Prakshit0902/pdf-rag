@@ -4,7 +4,8 @@ import uuid
 
 from app.parsing.parser import parse_pdf
 from app.parsing.extract_images import extract_images_from_pdf
-
+from app.ingestion.chunker import split_text_into_chunks
+from app.ingestion.chunker import count_tokens
 
 INPUT_DIR = "data/cleaned_pdfs"
 PARSED_DIR = "data/parsed"
@@ -14,31 +15,55 @@ os.makedirs(PARSED_DIR, exist_ok=True)
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
 
-def build_chunks(documents, pdf_filename, image_paths):
+def build_chunks(
+    documents,
+    pdf_filename,
+    image_paths
+):
 
     chunks = []
 
-    for index, doc in enumerate(documents):
+    chunk_index = 0
 
-        chunk = {
-            "id": str(uuid.uuid4()),
+    for doc in documents:
 
-            "source_file": pdf_filename,
+        text = doc.text
 
-            "chunk_index": index,
+        semantic_chunks = split_text_into_chunks(
+            text
+        )
 
-            "text": doc.text,
+        for semantic_chunk in semantic_chunks:
+            if len(semantic_chunk.split()) < 30:
+                continue
 
-            # placeholder for now
-            # later we'll improve this
-            "page": doc.metadata.get("page_label", None),
+            chunk = {
+                "id": str(uuid.uuid4()),
 
-            "images": image_paths,
+                "source_file": pdf_filename,
 
-            "metadata": doc.metadata,
-        }
+                "chunk_index": chunk_index,
 
-        chunks.append(chunk)
+                "text": semantic_chunk,
+
+                "page": doc.metadata.get(
+                    "page_label",
+                    None
+                ),
+
+                "images": image_paths,
+
+                "metadata": doc.metadata,
+            }
+
+            chunks.append(chunk)
+
+            chunk_index += 1
+            
+            print(
+                "TOKENS:",
+                count_tokens(semantic_chunk)
+            )
 
     return chunks
 

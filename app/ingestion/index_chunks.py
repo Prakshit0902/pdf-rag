@@ -37,6 +37,16 @@ def load_all_chunks():
 def main():
 
     chunks = load_all_chunks()
+    
+    for chunk in chunks:
+
+        token_count = len(
+            chunk["text"].split()
+        )
+
+        print(
+            f"Chunk size: {token_count} words"
+        )
 
     print(f"Loaded {len(chunks)} chunks")
 
