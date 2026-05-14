@@ -18,7 +18,7 @@ os.makedirs(IMAGE_DIR, exist_ok=True)
 def build_chunks(
     documents,
     pdf_filename,
-    image_paths
+    image_map
 ):
 
     chunks = []
@@ -36,6 +36,16 @@ def build_chunks(
         for semantic_chunk in semantic_chunks:
             if len(semantic_chunk.split()) < 30:
                 continue
+            
+            page = str(
+                doc.metadata.get(
+                    "page_label",
+                    doc.metadata.get(
+                        "page",
+                        ""
+                    )
+                )
+            )
 
             chunk = {
                 "id": str(uuid.uuid4()),
@@ -50,8 +60,7 @@ def build_chunks(
                     "page_label",
                     None
                 ),
-
-                "images": image_paths,
+                "images": image_map.get(page, []),
 
                 "metadata": doc.metadata,
             }
@@ -90,12 +99,17 @@ def process_all_pdfs():
             pdf_file.replace(".pdf", "")
         )
 
-        image_paths = extract_images_from_pdf(
+        image_map = extract_images_from_pdf(
             pdf_path,
             pdf_image_dir
         )
 
-        print(f"Extracted {len(image_paths)} images")
+        total_images = sum(
+            len(v)
+            for v in image_map.values()
+        )
+
+        print(f"Extracted {total_images} images")
 
         # -------------------------
         # Parse PDF
@@ -112,7 +126,7 @@ def process_all_pdfs():
         chunks = build_chunks(
             documents,
             pdf_file,
-            image_paths
+            image_map
         )
 
         # -------------------------

@@ -2,22 +2,24 @@ import fitz
 import os
 
 
-def extract_images_from_pdf(pdf_path: str, output_dir: str):
-    """
-    Extract all embedded images from PDF.
-    """
+def extract_images_from_pdf(
+    pdf_path: str,
+    output_dir: str
+):
 
     os.makedirs(output_dir, exist_ok=True)
 
     pdf = fitz.open(pdf_path)
 
-    image_paths = []
+    image_map = {}
 
     for page_index in range(len(pdf)):
 
         page = pdf[page_index]
 
         images = page.get_images(full=True)
+
+        page_images = []
 
         for image_index, img in enumerate(images):
 
@@ -41,6 +43,8 @@ def extract_images_from_pdf(pdf_path: str, output_dir: str):
             with open(image_path, "wb") as f:
                 f.write(image_bytes)
 
-            image_paths.append(image_path)
+            page_images.append(image_path)
 
-    return image_paths
+        image_map[str(page_index + 1)] = page_images
+
+    return image_map

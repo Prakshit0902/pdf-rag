@@ -38,10 +38,21 @@ def ask_question(question: str):
 
     context = build_context(chunks)
 
-    prompt = f"""
-You are a highly accurate document QA system.
+    image_paths = []
 
-Answer ONLY from the provided context.
+    for chunk in chunks:
+
+        images = chunk.get("images", [])
+
+        image_paths.extend(images)
+
+    # deduplicate
+    image_paths = list(set(image_paths))
+
+    prompt = f"""
+You are a highly accurate multimodal document QA system.
+
+Answer ONLY from the provided context and images.
 
 If the answer is not present,
 say:
@@ -50,7 +61,7 @@ say:
 Always:
 - cite source file names
 - mention page numbers if available
-- be concise but complete
+- use image evidence when relevant
 - avoid hallucinations
 
 QUESTION:
@@ -60,7 +71,10 @@ CONTEXT:
 {context}
 """
 
-    answer = generate_answer(prompt)
+    answer = generate_answer(
+        prompt,
+        image_paths=image_paths
+    )
 
     return {
         "question": question,
