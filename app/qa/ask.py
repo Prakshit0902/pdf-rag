@@ -39,15 +39,22 @@ def ask_question(question: str):
     context = build_context(chunks)
 
     image_paths = []
+    page_renders = []
 
     for chunk in chunks:
 
         images = chunk.get("images", [])
 
         image_paths.extend(images)
+        
+        page_render = chunk.get("page_render")
+        
+        if page_render:
+            page_renders.append(page_render)
 
     # deduplicate
     image_paths = list(set(image_paths))
+    page_renders = list(set(page_renders))
 
     prompt = f"""
 You are a highly accurate multimodal document QA system.
@@ -73,7 +80,7 @@ CONTEXT:
 
     answer = generate_answer(
         prompt,
-        image_paths=image_paths
+        image_paths=image_paths + page_renders
     )
 
     return {

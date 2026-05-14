@@ -6,19 +6,23 @@ from app.parsing.parser import parse_pdf
 from app.parsing.extract_images import extract_images_from_pdf
 from app.ingestion.chunker import split_text_into_chunks
 from app.ingestion.chunker import count_tokens
+from app.parsing.render_pages import render_pdf_pages
 
 INPUT_DIR = "data/cleaned_pdfs"
 PARSED_DIR = "data/parsed"
 IMAGE_DIR = "data/images"
+PAGE_RENDER_DIR = "data/page_renders"
 
 os.makedirs(PARSED_DIR, exist_ok=True)
 os.makedirs(IMAGE_DIR, exist_ok=True)
+os.makedirs(PAGE_RENDER_DIR, exist_ok=True)
 
 
 def build_chunks(
     documents,
     pdf_filename,
-    image_map
+    image_map,
+    page_render_map
 ):
 
     chunks = []
@@ -60,8 +64,11 @@ def build_chunks(
                     "page_label",
                     None
                 ),
+                
                 "images": image_map.get(page, []),
-
+                
+                "page_render": page_render_map.get(page),
+                
                 "metadata": doc.metadata,
             }
 
@@ -110,6 +117,18 @@ def process_all_pdfs():
         )
 
         print(f"Extracted {total_images} images")
+        
+        pdf_render_dir = os.path.join(
+            PAGE_RENDER_DIR,
+            pdf_file.replace(".pdf", "")
+        )
+        
+        page_render_map = render_pdf_pages(
+            pdf_path,
+            pdf_render_dir
+        )
+        
+        print(f"Rendered {len(page_render_map)} pages into images") 
 
         # -------------------------
         # Parse PDF
@@ -126,7 +145,8 @@ def process_all_pdfs():
         chunks = build_chunks(
             documents,
             pdf_file,
-            image_map
+            image_map,
+            page_render_map
         )
 
         # -------------------------
