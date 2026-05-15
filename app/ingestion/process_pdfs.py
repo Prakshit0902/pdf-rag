@@ -29,29 +29,31 @@ def build_chunks(
 
     chunk_index = 0
 
-    for doc in documents:
+    for doc_idx, doc in enumerate(documents):
 
         text = doc.text
 
         semantic_chunks = split_text_into_chunks(
             text
         )
-        
+
         total_chunks = len(semantic_chunks)
+
+        # Use document index + 1 as page number since docs are already page-split
+        doc_page = str(doc_idx + 1)
 
         for semantic_chunk in semantic_chunks:
             if len(semantic_chunk.split()) < 30:
                 continue
-            
-            page = str(
-                doc.metadata.get(
-                    "page_label",
-                    doc.metadata.get(
-                        "page",
-                        ""
-                    )
-                )
+
+            # Try to get page from document metadata, fallback to doc index
+            page = doc.metadata.get(
+                "page_label",
+                doc.metadata.get("page", doc_page)
             )
+
+            if not page:
+                page = doc_page
 
             chunk = {
                 "id": str(uuid.uuid4()),
@@ -62,15 +64,12 @@ def build_chunks(
 
                 "text": semantic_chunk,
 
-                "page": doc.metadata.get(
-                    "page_label",
-                    None
-                ),
-                
-                "images": image_map.get(page, []),
-                
-                "page_render": page_render_map.get(page),
-                
+                "page": page,
+
+                "images": image_map.get(str(page), []) if page else [],
+
+                "page_render": page_render_map.get(str(page)) if page else None,
+
                 "metadata": doc.metadata,
                 "parent_doc_id": pdf_filename,
 
@@ -82,7 +81,7 @@ def build_chunks(
             chunks.append(chunk)
 
             chunk_index += 1
-            
+
             print(
                 "TOKENS:",
                 count_tokens(semantic_chunk)

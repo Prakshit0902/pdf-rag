@@ -46,9 +46,23 @@ def merge_results(
 
     merged = {}
 
-    for chunk in vector_chunks + bm25_chunks:
-
+    # Add vector chunks first
+    for chunk in vector_chunks:
         merged[chunk["id"]] = chunk
+
+    # Merge BM25 scores into existing chunks (don't overwrite)
+    for chunk in bm25_chunks:
+
+        chunk_id = chunk["id"]
+
+        if chunk_id in merged:
+            # Preserve vector scores, add BM25 score
+            existing = merged[chunk_id]
+            if "bm25_score" in chunk:
+                existing["bm25_score"] = chunk["bm25_score"]
+        else:
+            # New chunk from BM25
+            merged[chunk_id] = chunk
 
     return list(merged.values())
 

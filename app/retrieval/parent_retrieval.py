@@ -42,9 +42,24 @@ def expand_parent_context(
 
         source_file = chunk["source_file"]
 
-        parent_index = chunk[
-            "parent_chunk_index"
-        ]
+        chunk_id = chunk.get("id")
+
+        parent_index = chunk.get(
+            "parent_chunk_index",
+            0
+        )
+
+        # Store all scores from retrieved chunk before we lose reference
+        scores_to_preserve = {}
+
+        if "vector_score" in chunk:
+            scores_to_preserve["vector_score"] = chunk.get("vector_score", 0)
+
+        if "bm25_score" in chunk:
+            scores_to_preserve["bm25_score"] = chunk.get("bm25_score", 0)
+
+        if "rerank_score" in chunk:
+            scores_to_preserve["rerank_score"] = chunk.get("rerank_score", 0)
 
         all_chunks = load_document(
             source_file
@@ -69,6 +84,13 @@ def expand_parent_context(
 
             seen.add(candidate["id"])
 
-            expanded_chunks.append(candidate)
+            # Copy candidate and preserve scores if IDs match
+            expanded_chunk = candidate.copy()
+
+            # Match by ID and copy scores
+            if candidate["id"] == chunk_id and scores_to_preserve:
+                expanded_chunk.update(scores_to_preserve)
+
+            expanded_chunks.append(expanded_chunk)
 
     return expanded_chunks
