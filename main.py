@@ -1,4 +1,5 @@
-from app.qa.ask import ask_question
+# from app.qa.ask import ask_question
+from app.agent.agentic_qa import ask_agentic_question
 
 
 def main():
@@ -12,9 +13,15 @@ def main():
         if question.lower() in ["exit", "quit"]:
             break
 
-        result = ask_question(question)
+        result = ask_agentic_question(question)
 
         print("\n====================\n")
+        
+        print("\n========== SEARCH QUERIES ==========\n")
+
+        for q in result["queries"]:
+
+            print("-", q)
         print(
             f"\nRewritten Query: "
             f"{result['rewritten_question']}"
@@ -25,31 +32,49 @@ def main():
 
         for chunk in result["retrieved_chunks"]:
 
+            # Handle None values in scores
+            vector = chunk.get("vector_score")
+            if vector is None:
+                vector = chunk.get("score", 0)
+            if vector is None:
+                vector = 0
+
+            bm25 = chunk.get("bm25_score")
+            if bm25 is None:
+                bm25 = 0
+
+            rerank = chunk.get("rerank_score")
+            if rerank is None:
+                rerank = 0
+
             print(
                 f"""
-        CHUNK: {chunk["chunk_id"]}
+        CHUNK: {chunk.get("chunk_id", chunk.get("id", "N/A"))}
 
-        FILE: {chunk["source_file"]}
+        FILE: {chunk.get("source_file", "N/A")}
 
-        PAGE: {chunk["page"]}
+        PAGE: {chunk.get("page", "N/A")}
 
-        VECTOR: {chunk["vector_score"]}
+        VECTOR: {vector:.4f}
 
-        BM25: {chunk["bm25_score"]}
+        BM25: {bm25:.4f}
 
-        RERANK: {chunk["rerank_score"]}
+        RERANK: {rerank:.4f}
 
         PREVIEW:
-        {chunk["preview"]}
+        {chunk.get("preview", chunk.get("text", ""))[:300]}
 
         ----------------------------
         """
             )
             
-        print("\n========== EVALUATION ==========\n")
+        # print("\n========== EVALUATION ==========\n")
 
+        # print(
+        #     result["evaluation"]
+        # )
         print(
-            result["evaluation"]
+            "\nReflection-enabled retrieval active."
         )
 
         print("\n====================\n")
