@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import MarkdownRenderer from "./MarkdownRenderer";
 
 interface Message {
   role: "user" | "assistant";
@@ -11,6 +12,15 @@ export default function ChatInterface() {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const sendMessage = async () => {
     if (!question.trim() || isLoading) return;
@@ -67,7 +77,7 @@ export default function ChatInterface() {
     <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-md border border-zinc-200">
       <h2 className="text-xl font-semibold mb-4 text-zinc-800">Chat</h2>
 
-      <div className="h-64 overflow-y-auto space-y-4 mb-4 p-2">
+      <div className="h-80 overflow-y-auto space-y-4 mb-4 p-2 border border-zinc-100 rounded-lg bg-zinc-50">
         {messages.length === 0 ? (
           <p className="text-zinc-400 text-center text-sm">Ask a question about your PDF</p>
         ) : (
@@ -77,13 +87,23 @@ export default function ChatInterface() {
               className={`p-3 rounded-lg ${
                 msg.role === "user"
                   ? "bg-zinc-900 text-white ml-8"
-                  : "bg-zinc-100 text-zinc-800 mr-8"
+                  : "bg-white text-zinc-800 mr-8 border border-zinc-200"
               }`}
             >
-              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+              {msg.role === "user" ? (
+                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+              ) : (
+                <div className="relative">
+                  <MarkdownRenderer content={msg.content} />
+                  {isLoading && i === messages.length - 1 && (
+                    <span className="inline-block w-2 h-4 bg-zinc-400 ml-0.5 animate-pulse" />
+                  )}
+                </div>
+              )}
             </div>
           ))
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       <div className="flex gap-2">
