@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+pydantic
+python-multipart
+pillow
+dotenv
+google-genai
+huggingface-hub
+sentence-transformers
+tiktoken
+qdrant-client
+llama-parse
+llama-index
+pdf2image
+pymupdf
+rank-bm25
