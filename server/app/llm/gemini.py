@@ -42,6 +42,7 @@ def generate_answer(
 
         config=types.GenerateContentConfig(
             temperature=0.2,
+            max_output_tokens=8192,
         ),
     )
 
@@ -75,6 +76,7 @@ def stream_answer(
 
         config=types.GenerateContentConfig(
             temperature=0.2,
+            max_output_tokens=8192,
         ),
     )
 

@@ -39,13 +39,15 @@ def load_chunks():
 
 load_chunks()
 
-bm25 = BM25Okapi(tokenized_chunks)
+bm25 = BM25Okapi(tokenized_chunks) if tokenized_chunks else None
 
 
 def bm25_search(
     query: str,
     top_k: int = 5
 ):
+    if not bm25:
+        return []
 
     tokenized_query = query.lower().split()
 

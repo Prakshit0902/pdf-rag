@@ -59,15 +59,14 @@ def stream_question(question: str):
     )
 
     prompt = f"""
-You are a highly accurate multimodal document QA system.
+You are a helpful AI assistant answering questions from documents.
 
-Answer ONLY from the provided context and images.
+Answer in clean markdown format. Use:
+- **bold** for key terms
+- bullet points for lists
+- code blocks for any code/technical content
 
-Always:
-- cite SOURCE_FILE
-- cite PAGE
-- cite CHUNK_ID
-- avoid hallucinations
+Only answer from the provided context. If uncertain, say so.
 
 QUESTION:
 {question}
@@ -77,6 +76,9 @@ REWRITTEN QUESTION:
 
 CONTEXT:
 {context}
+
+Provide a well-formatted answer in markdown. List sources at the end as:
+**Sources:** [file.pdf, page X], [file2.pdf, page Y]
 """
 
     final_answer = ""
