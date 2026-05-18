@@ -1,7 +1,16 @@
+import os
+from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 
+load_dotenv()
+
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
 client = QdrantClient(
-    host="localhost",
-    port=6333
+    url=QDRANT_URL,
+    api_key=QDRANT_API_KEY,
+    cloud_inference=True,
 )
+
+print(client.get_collections())

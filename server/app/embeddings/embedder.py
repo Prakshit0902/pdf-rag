@@ -1,18 +1,19 @@
-from sentence_transformers import SentenceTransformer
+import os
+from dotenv import load_dotenv
+from google import genai
 
+load_dotenv()
 
-# VERY strong retrieval model
-MODEL_NAME = "BAAI/bge-m3"
+MODEL_NAME = "gemini-embedding-2"
 
-
-model = SentenceTransformer(MODEL_NAME)
+client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY")
+)
 
 
 def get_embedding(text: str):
-
-    embedding = model.encode(
-        text,
-        normalize_embeddings=True
+    result = client.models.embed_content(
+        model=MODEL_NAME,
+        contents=text,
     )
-
-    return embedding.tolist()
+    return result.embeddings[0].values
