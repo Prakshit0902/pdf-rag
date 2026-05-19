@@ -121,75 +121,85 @@ def process_pdf_pipeline(filename: str, job_id: str, pdf_hash: Optional[str] = N
         # Step 1: Extract Images
         # -------------------------
         from app.parsing.extract_images import extract_images_from_pdf
+        from app.benchmark_tracker import BenchmarkTracker
 
-        pdf_image_dir = os.path.join(
-            IMAGE_DIR,
-            filename.replace(".pdf", "")
-        )
+        tracker = BenchmarkTracker(f"upload_pipeline_{filename}")
+        with tracker:
 
-        image_map = extract_images_from_pdf(pdf_path, pdf_image_dir)
-        print(f"[{job_id}] Extracted {sum(len(v) for v in image_map.values())} images")
+            with tracker.step("extract_images"):
+                pdf_image_dir = os.path.join(
+                    IMAGE_DIR,
+                    filename.replace(".pdf", "")
+                )
 
-        # -------------------------
-        # Step 2: Render Pages
-        # -------------------------
-        from app.parsing.render_pages import render_pdf_pages
+                image_map = extract_images_from_pdf(pdf_path, pdf_image_dir)
+                print(f"[{job_id}] Extracted {sum(len(v) for v in image_map.values())} images")
 
-        pdf_render_dir = os.path.join(
-            PAGE_RENDER_DIR,
-            filename.replace(".pdf", "")
-        )
+            # -------------------------
+            # Step 2: Render Pages
+            # -------------------------
+            with tracker.step("render_pages"):
+                from app.parsing.render_pages import render_pdf_pages
 
-        page_render_map = render_pdf_pages(pdf_path, pdf_render_dir)
-        print(f"[{job_id}] Rendered {len(page_render_map)} pages")
+                pdf_render_dir = os.path.join(
+                    PAGE_RENDER_DIR,
+                    filename.replace(".pdf", "")
+                )
 
-        # -------------------------
-        # Step 3: Parse PDF
-        # -------------------------
-        from app.parsing.parser import parse_pdf
+                page_render_map = render_pdf_pages(pdf_path, pdf_render_dir)
+                print(f"[{job_id}] Rendered {len(page_render_map)} pages")
 
-        documents = parse_pdf(pdf_path)
-        print(f"[{job_id}] Parsed {len(documents)} document blocks")
+            # -------------------------
+            # Step 3: Parse PDF
+            # -------------------------
+            with tracker.step("parse_pdf"):
+                from app.parsing.parser import parse_pdf
 
-        # -------------------------
-        # Step 4: Build Chunks
-        # -------------------------
-        from app.ingestion.process_pdfs import build_chunks
+                documents = parse_pdf(pdf_path)
+                print(f"[{job_id}] Parsed {len(documents)} document blocks")
 
-        chunks = build_chunks(
-            documents,
-            filename,
-            image_map,
-            page_render_map
-        )
+            # -------------------------
+            # Step 4: Build Chunks
+            # -------------------------
+            with tracker.step("build_chunks"):
+                from app.ingestion.process_pdfs import build_chunks
 
-        # -------------------------
-        # Step 5: Save Chunks
-        # -------------------------
-        output_path = os.path.join(
-            PARSED_DIR,
-            filename.replace(".pdf", ".json")
-        )
+                chunks = build_chunks(
+                    documents,
+                    filename,
+                    image_map,
+                    page_render_map
+                )
 
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(chunks, f, ensure_ascii=False, indent=2)
+            # -------------------------
+            # Step 5: Save Chunks
+            # -------------------------
+            with tracker.step("save_chunks"):
+                output_path = os.path.join(
+                    PARSED_DIR,
+                    filename.replace(".pdf", ".json")
+                )
 
-        print(f"[{job_id}] Saved chunks to {output_path}")
+                with open(output_path, "w", encoding="utf-8") as f:
+                    json.dump(chunks, f, ensure_ascii=False, indent=2)
 
-        # Cache the parsed result
-        if pdf_hash:
-            set_cached_entry(pdf_hash, filename, output_path)
+                print(f"[{job_id}] Saved chunks to {output_path}")
 
-        # -------------------------
-        # Step 6: Index Chunks
-        # -------------------------
-        from app.ingestion.index_chunks import index_single_file
+                # Cache the parsed result
+                if pdf_hash:
+                    set_cached_entry(pdf_hash, filename, output_path)
 
-        index_single_file(output_path)
-        print(f"[{job_id}] Indexed chunks to vector store")
+            # -------------------------
+            # Step 6: Index Chunks
+            # -------------------------
+            with tracker.step("index_chunks"):
+                from app.ingestion.index_chunks import index_single_file
 
-        if pdf_hash:
-            mark_indexed(pdf_hash)
+                index_single_file(output_path)
+                print(f"[{job_id}] Indexed chunks to vector store")
+
+                if pdf_hash:
+                    mark_indexed(pdf_hash)
 
         job.status = JobStatus.COMPLETED
         job.completed_at = datetime.utcnow()
