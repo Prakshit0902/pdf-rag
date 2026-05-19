@@ -12,6 +12,7 @@ interface JobState {
 }
 
 export default function FileUpload() {
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [job, setJob] = useState<JobState>({
     jobId: null,
     status: "pending",
@@ -30,7 +31,7 @@ export default function FileUpload() {
     formData.append("file", file);
 
     try {
-      const response = await fetch("http://localhost:8000/upload", {
+      const response = await fetch(`${API_BASE}/upload`, {
         method: "POST",
         body: formData,
       });
@@ -63,7 +64,7 @@ export default function FileUpload() {
   const pollJobStatus = async (jobId: string) => {
     const poll = async () => {
       try {
-        const response = await fetch(`http://localhost:8000/upload/status/${jobId}`);
+        const response = await fetch(`${API_BASE}/upload/status/${jobId}`);
         if (!response.ok) throw new Error("Failed to fetch status");
 
         const data = await response.json();

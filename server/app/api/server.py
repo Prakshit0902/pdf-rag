@@ -1,3 +1,7 @@
+import os
+from dotenv import load_dotenv
+import time
+
 from fastapi import FastAPI, UploadFile, BackgroundTasks
 from fastapi.responses import StreamingResponse
 
@@ -14,12 +18,29 @@ from app.api.upload import (
 )
 
 
+load_dotenv()
+
+# Record start time to report uptime on the health endpoint
+START_TIME = time.time()
+
 app = FastAPI(title="PDF RAG API", version="1.0.0")
+
+# Configure CORS origins via the ALLOWED_ORIGINS environment variable.
+# Example: ALLOWED_ORIGINS="https://your-site.vercel.app,https://www.your-site.com"
+raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+if raw_origins.strip() == "*":
+    origins = ["*"]
+else:
+    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+
+# When using wildcard origins, browsers disallow credentials. Disable credentials
+# automatically in that case to avoid CORS errors.
+allow_credentials = False if origins == ["*"] else True
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
+    allow_origins=origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -54,6 +75,15 @@ async def upload(
     through the complete pipeline (parse → chunk → index).
     """
     return await upload_pdf(file, background_tasks)
+
+
+@app.get("/health")
+def health():
+    """Lightweight health check used by load balancers and deployment platforms."""
+    return {
+        "status": "ok",
+        "uptime_seconds": int(time.time() - START_TIME),
+    }
 
 
 @app.get("/upload/status/{job_id}")

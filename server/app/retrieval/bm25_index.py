@@ -15,6 +15,10 @@ def load_chunks():
 
     global all_chunks
     global tokenized_chunks
+    # If the parsed data directory doesn't exist yet (e.g. fresh deploy),
+    # don't raise — leave the index empty and allow the app to start.
+    if not os.path.isdir(PARSED_DIR):
+        return
 
     json_files = [
         f for f in os.listdir(PARSED_DIR)

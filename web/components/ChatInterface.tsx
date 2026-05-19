@@ -9,6 +9,7 @@ interface Message {
 }
 
 export default function ChatInterface() {
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -31,7 +32,7 @@ export default function ChatInterface() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/chat", {
+      const response = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question }),
