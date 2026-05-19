@@ -24,48 +24,56 @@ from app.qa.query_rewriter import (
 def ask_agentic_question(
     question: str
 ):
+    from app.benchmark_tracker import BenchmarkTracker
 
-    # -------------------------
-    # Query Rewriting
-    # -------------------------
+    tracker = BenchmarkTracker("agentic_qa")
+    with tracker:
 
-    rewritten_question = rewrite_query(
-        question
-    )
+        # -------------------------
+        # Query Rewriting
+        # -------------------------
 
-    # -------------------------
-    # Context-Aware Query Planning
-    # (planner now uses two-stage retrieval)
-    # -------------------------
+        with tracker.step("rewrite_query"):
+            rewritten_question = rewrite_query(
+                question
+            )
 
-    raw_queries = generate_search_queries(
-        rewritten_question
-    )
+        # -------------------------
+        # Context-Aware Query Planning
+        # (planner now uses two-stage retrieval)
+        # -------------------------
 
-    try:
-        queries = json.loads(raw_queries)
-    except Exception:
-        queries = [rewritten_question]
+        with tracker.step("generate_search_queries"):
+            raw_queries = generate_search_queries(
+                rewritten_question
+            )
 
-    all_queries = list(queries)
+            try:
+                queries = json.loads(raw_queries)
+            except Exception:
+                queries = [rewritten_question]
 
-    # -------------------------
-    # Gather Evidence
-    # -------------------------
+            all_queries = list(queries)
 
-    chunks = gather_evidence(
-        all_queries
-    )
+        # -------------------------
+        # Gather Evidence
+        # -------------------------
 
-    context = build_context(
-        chunks
-    )
+        with tracker.step("gather_evidence"):
+            chunks = gather_evidence(
+                all_queries
+            )
 
-    # -------------------------
-    # Generate Answer
-    # -------------------------
+        with tracker.step("build_context"):
+            context = build_context(
+                chunks
+            )
 
-    prompt = f"""
+        # -------------------------
+        # Generate Answer
+        # -------------------------
+
+        prompt = f"""
 You are an advanced multimodal RAG system.
 
 Answer the question using the evidence.
@@ -83,9 +91,10 @@ EVIDENCE:
 {context}
 """
 
-    answer = generate_answer(
-        prompt
-    )
+        with tracker.step("generate_answer"):
+            answer = generate_answer(
+                prompt
+            )
 
     return {
         "question": question,

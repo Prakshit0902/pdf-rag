@@ -16,49 +16,56 @@ from app.qa.ask import build_context
 
 
 def stream_question(question: str):
+    from app.benchmark_tracker import BenchmarkTracker
 
-    rewritten_question = rewrite_query(
-        question
-    )
+    tracker = BenchmarkTracker("stream_qa")
+    with tracker:
 
-    chunks = retrieve_chunks(
-        rewritten_question
-    )
-
-    context = build_context(chunks)
-
-    image_paths = []
-
-    page_renders = []
-
-    for chunk in chunks:
-
-        images = chunk.get(
-            "images",
-            []
-        )
-
-        image_paths.extend(images)
-
-        page_render = chunk.get(
-            "page_render"
-        )
-
-        if page_render:
-
-            page_renders.append(
-                page_render
+        with tracker.step("rewrite_query"):
+            rewritten_question = rewrite_query(
+                question
             )
 
-    image_paths = list(
-        set(image_paths)
-    )
+        with tracker.step("retrieve_chunks"):
+            chunks = retrieve_chunks(
+                rewritten_question
+            )
 
-    page_renders = list(
-        set(page_renders)
-    )
+        with tracker.step("build_context"):
+            context = build_context(chunks)
 
-    prompt = f"""
+            image_paths = []
+
+            page_renders = []
+
+            for chunk in chunks:
+
+                images = chunk.get(
+                    "images",
+                    []
+                )
+
+                image_paths.extend(images)
+
+                page_render = chunk.get(
+                    "page_render"
+                )
+
+                if page_render:
+
+                    page_renders.append(
+                        page_render
+                    )
+
+            image_paths = list(
+                set(image_paths)
+            )
+
+            page_renders = list(
+                set(page_renders)
+            )
+
+        prompt = f"""
 You are a helpful AI assistant answering questions from documents.
 
 Answer in clean markdown format. Use:
@@ -81,23 +88,26 @@ Provide a well-formatted answer in markdown. List sources at the end as:
 **Sources:** [file.pdf, page X], [file2.pdf, page Y]
 """
 
-    final_answer = ""
+        final_answer = ""
 
-    for token in stream_answer(
-        prompt,
-        image_paths=image_paths + page_renders
-    ):
+        # Note: Streaming time tracking measures the entire stream cycle
+        with tracker.step("stream_answer"):
+            for token in stream_answer(
+                prompt,
+                image_paths=image_paths + page_renders
+            ):
 
-        final_answer += token
+                final_answer += token
 
-        yield token
+                yield token
 
-    add_message(
-        "user",
-        question
-    )
+        with tracker.step("add_message"):
+            add_message(
+                "user",
+                question
+            )
 
-    add_message(
-        "assistant",
-        final_answer
-    )
+            add_message(
+                "assistant",
+                final_answer
+            )

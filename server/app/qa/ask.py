@@ -44,32 +44,41 @@ def build_context(chunks):
 
 
 def ask_question(question: str):
-    rewritten_question = rewrite_query(
-        question
-    )
-    chunks = retrieve_chunks(rewritten_question)
+    from app.benchmark_tracker import BenchmarkTracker
+    
+    tracker = BenchmarkTracker("standard_qa")
+    with tracker:
 
-    context = build_context(chunks)
+        with tracker.step("rewrite_query"):
+            rewritten_question = rewrite_query(
+                question
+            )
+            
+        with tracker.step("retrieve_chunks"):
+            chunks = retrieve_chunks(rewritten_question)
 
-    image_paths = []
-    page_renders = []
+        with tracker.step("build_context"):
+            context = build_context(chunks)
 
-    for chunk in chunks:
+            image_paths = []
+            page_renders = []
 
-        images = chunk.get("images", [])
+            for chunk in chunks:
 
-        image_paths.extend(images)
-        
-        page_render = chunk.get("page_render")
-        
-        if page_render:
-            page_renders.append(page_render)
+                images = chunk.get("images", [])
 
-    # deduplicate
-    image_paths = list(set(image_paths))
-    page_renders = list(set(page_renders))
+                image_paths.extend(images)
+                
+                page_render = chunk.get("page_render")
+                
+                if page_render:
+                    page_renders.append(page_render)
 
-    prompt = f"""
+            # deduplicate
+            image_paths = list(set(image_paths))
+            page_renders = list(set(page_renders))
+
+        prompt = f"""
         You are a highly accurate multimodal document QA system.
 
         Answer ONLY from the provided context and images.
@@ -96,22 +105,25 @@ def ask_question(question: str):
         {context}
         """
 
-    answer = generate_answer(
-        prompt,
-        image_paths=image_paths + page_renders
-    )
-    
-    add_message(
-        "user",
-        question
-    )
+        with tracker.step("generate_answer"):
+            answer = generate_answer(
+                prompt,
+                image_paths=image_paths + page_renders
+            )
+        
+        with tracker.step("add_message"):
+            add_message(
+                "user",
+                question
+            )
 
-    add_message(
-        "assistant",
-        answer
-    )
-    
-    evaluation = evaluate_answer(question, answer, chunks)
+            add_message(
+                "assistant",
+                answer
+            )
+        
+        with tracker.step("evaluate_answer"):
+            evaluation = evaluate_answer(question, answer, chunks)
 
     return {
         "question": question,
