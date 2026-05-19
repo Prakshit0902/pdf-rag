@@ -17,3 +17,11 @@ def get_embedding(text: str):
         contents=text,
     )
     return result.embeddings[0].values
+
+
+def get_embeddings_batch(texts: list[str]) -> list[list[float]]:
+    result = client.models.embed_content(
+        model=MODEL_NAME,
+        contents=texts,
+    )
+    return [e.values for e in result.embeddings]
