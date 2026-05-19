@@ -86,6 +86,12 @@ def health():
     }
 
 
+@app.head("/health")
+def health_head():
+    """Allow HEAD probes to pass without returning a body."""
+    return {}
+
+
 @app.get("/upload/status/{job_id}")
 async def job_status(job_id: str):
     """Get the status of a processing job."""
