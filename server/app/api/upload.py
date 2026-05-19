@@ -1,6 +1,7 @@
 import os
 import uuid
 import asyncio
+import json
 from datetime import datetime
 from typing import Dict, Optional
 from enum import Enum
@@ -8,6 +9,12 @@ from enum import Enum
 from fastapi import UploadFile, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 
+from app.ingestion.cache import (
+    compute_bytes_hash,
+    is_cached,
+    set_cached_entry,
+    mark_indexed,
+)
 
 INPUT_DIR = "data/cleaned_pdfs"
 PARSED_DIR = "data/parsed"
@@ -99,7 +106,7 @@ async def save_file(file: UploadFile, contents: bytes) -> str:
     return safe_filename
 
 
-def process_pdf_pipeline(filename: str, job_id: str) -> None:
+def process_pdf_pipeline(filename: str, job_id: str, pdf_hash: Optional[str] = None) -> None:
     """Background task to process PDF through the pipeline."""
     job = job_store.get(job_id)
     if not job:
@@ -159,8 +166,6 @@ def process_pdf_pipeline(filename: str, job_id: str) -> None:
         # -------------------------
         # Step 5: Save Chunks
         # -------------------------
-        import json
-
         output_path = os.path.join(
             PARSED_DIR,
             filename.replace(".pdf", ".json")
@@ -171,6 +176,10 @@ def process_pdf_pipeline(filename: str, job_id: str) -> None:
 
         print(f"[{job_id}] Saved chunks to {output_path}")
 
+        # Cache the parsed result
+        if pdf_hash:
+            set_cached_entry(pdf_hash, filename, output_path)
+
         # -------------------------
         # Step 6: Index Chunks
         # -------------------------
@@ -178,6 +187,9 @@ def process_pdf_pipeline(filename: str, job_id: str) -> None:
 
         index_single_file(output_path)
         print(f"[{job_id}] Indexed chunks to vector store")
+
+        if pdf_hash:
+            mark_indexed(pdf_hash)
 
         job.status = JobStatus.COMPLETED
         job.completed_at = datetime.utcnow()
@@ -193,14 +205,23 @@ async def upload_pdf(
     file: UploadFile,
     background_tasks: BackgroundTasks
 ) -> JSONResponse:
-    """
-    Upload a PDF file (max 50MB).
-
-    Returns job_id for tracking the processing status.
-    """
     validate_file(file)
 
     contents = await validate_file_size(file)
+
+    pdf_hash = compute_bytes_hash(contents)
+
+    if is_cached(pdf_hash):
+        entry = _get_cached_entry_safe(pdf_hash)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "File already processed (cached)",
+                "filename": file.filename,
+                "parsed_path": entry["parsed_path"],
+                "status": "cached",
+            }
+        )
 
     filename = await save_file(file, contents)
 
@@ -208,7 +229,7 @@ async def upload_pdf(
     job = Job(job_id=job_id, filename=filename)
     job_store[job_id] = job
 
-    background_tasks.add_task(process_pdf_pipeline, filename, job_id)
+    background_tasks.add_task(process_pdf_pipeline, filename, job_id, pdf_hash)
 
     return JSONResponse(
         status_code=202,
@@ -219,6 +240,11 @@ async def upload_pdf(
             "status": job.status.value
         }
     )
+
+
+def _get_cached_entry_safe(file_hash: str) -> Optional[Dict]:
+    from app.ingestion.cache import get_cached_entry
+    return get_cached_entry(file_hash) or {}
 
 
 def get_job_status(job_id: str) -> JSONResponse:
