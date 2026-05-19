@@ -77,7 +77,7 @@ async def upload(
     return await upload_pdf(file, background_tasks)
 
 
-@app.head("/health")
+@app.get("/health")
 def health():
     """Lightweight health check used by load balancers and deployment platforms."""
     return {
