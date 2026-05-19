@@ -2,8 +2,6 @@
 
 import { useState, useRef, useEffect } from "react";
 import MarkdownRenderer from "./MarkdownRenderer";
-import dotenv from "dotenv";
-dotenv.config();
 
 interface Message {
   role: "user" | "assistant";

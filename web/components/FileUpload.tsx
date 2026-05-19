@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import dotenv from "dotenv";
-dotenv.config();
+
 
 type JobStatus = "pending" | "processing" | "completed" | "failed";
 
