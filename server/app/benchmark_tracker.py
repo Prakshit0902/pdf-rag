@@ -5,7 +5,7 @@ from datetime import datetime
 
 # Adjust path so benchmark folder is inside server/
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BENCHMARK_DIR = os.path.join(BASE_DIR, "benchmark")
+BENCHMARK_DIR = os.path.join(BASE_DIR, "benchmark-cloud")
 os.makedirs(BENCHMARK_DIR, exist_ok=True)
 
 class BenchmarkTracker:

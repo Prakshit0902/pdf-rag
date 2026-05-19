@@ -4,15 +4,51 @@ import uuid
 import time
 import json
 import re
+import functools
 from datetime import datetime
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+def add_exponential_backoff_to_gemini():
+    """Applies exponential backoff to Gemini API calls only during this benchmark run."""
+    try:
+        import app.llm.gemini as llm_gemini
+        import app.embeddings.embedder as embedder
+        
+        def with_backoff(func):
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                max_retries = 6
+                base_delay = 8  # Start with an 8-second delay
+                for attempt in range(max_retries):
+                    try:
+                        return func(*args, **kwargs)
+                    except Exception as e:
+                        err_msg = str(e).lower()
+                        # Catch ResourceExhausted, 429, Quota, etc.
+                        if "429" in err_msg or "exhausted" in err_msg or "quota" in err_msg or "rate limit" in err_msg or "503" in err_msg:
+                            if attempt == max_retries - 1:
+                                raise
+                            delay = base_delay * (2 ** attempt)
+                            print(f"\n    [Rate Limit Hit!] Waiting {delay}s before retry {attempt+1}/{max_retries} for {func.__name__}...")
+                            time.sleep(delay)
+                        else:
+                            raise
+            return wrapper
+
+        llm_gemini.generate_answer = with_backoff(llm_gemini.generate_answer)
+        embedder.get_embedding = with_backoff(embedder.get_embedding)
+    except Exception as e:
+        print(f"Failed to patch Gemini functions with backoff: {e}")
+
+# Apply the backoff before importing the pipeline functions
+add_exponential_backoff_to_gemini()
 
 from app.api.upload import process_pdf_pipeline, job_store, Job, INPUT_DIR
 from app.agent.agentic_qa import ask_agentic_question
 
 BENCHMARK_DIR = os.path.join("app", "benchmark")
-RESULTS_DIR = "benchmark"
+RESULTS_DIR = "benchmark-cloud"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 def parse_questions():
@@ -86,6 +122,12 @@ def run_benchmarks():
             "status": answer[:50]
         })
         print(f"Time: {duration:.2f}s")
+        
+        # Rate limit is 15 requests/min (1 request per 4 seconds)
+        # Adding a 5-second delay between questions to be safe
+        if idx < len(questions) - 1:
+            print("Sleeping for 5 seconds to respect API rate limits...")
+            time.sleep(5)
         
     # 3. Save Summary
     summary = {
