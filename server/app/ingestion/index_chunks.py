@@ -1,14 +1,14 @@
 import os
 import json
 
-from app.embeddings.embedder import get_embedding
+from app.embeddings.embedder import get_embeddings_batch
 
 from app.vectorstore.store import (
     create_collection,
     store_chunks
 )
 
-
+BATCH_SIZE = 100
 PARSED_DIR = "data/parsed"
 
 
@@ -50,17 +50,16 @@ def main():
 
     print(f"Loaded {len(chunks)} chunks")
 
+    texts = [chunk["text"] for chunk in chunks]
     embeddings = []
 
-    for index, chunk in enumerate(chunks):
-
-        print(f"Embedding {index+1}/{len(chunks)}")
-
-        embedding = get_embedding(
-            chunk["text"]
-        )
-
-        embeddings.append(embedding)
+    total_batches = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
+    for i in range(0, len(texts), BATCH_SIZE):
+        batch = texts[i:i + BATCH_SIZE]
+        batch_num = i // BATCH_SIZE + 1
+        print(f"Embedding batch {batch_num}/{total_batches} ({len(batch)} texts)")
+        batch_embeddings = get_embeddings_batch(batch)
+        embeddings.extend(batch_embeddings)
 
     vector_size = len(embeddings[0])
 
@@ -78,10 +77,16 @@ def index_single_file(json_path: str) -> None:
 
     print(f"Indexing {len(chunks)} chunks from {json_path}")
 
+    texts = [chunk["text"] for chunk in chunks]
     embeddings = []
-    for chunk in chunks:
-        embedding = get_embedding(chunk["text"])
-        embeddings.append(embedding)
+
+    total_batches = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
+    for i in range(0, len(texts), BATCH_SIZE):
+        batch = texts[i:i + BATCH_SIZE]
+        batch_num = i // BATCH_SIZE + 1
+        print(f"  Embedding batch {batch_num}/{total_batches} ({len(batch)} texts)")
+        batch_embeddings = get_embeddings_batch(batch)
+        embeddings.extend(batch_embeddings)
 
     if embeddings:
         vector_size = len(embeddings[0])
