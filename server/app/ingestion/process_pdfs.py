@@ -8,10 +8,11 @@ from app.ingestion.chunker import split_text_into_chunks
 from app.ingestion.chunker import count_tokens
 from app.parsing.render_pages import render_pdf_pages
 
-INPUT_DIR = "data/cleaned_pdfs"
-PARSED_DIR = "data/parsed"
-IMAGE_DIR = "data/images"
-PAGE_RENDER_DIR = "data/page_renders"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+INPUT_DIR = os.path.join(BASE_DIR, "data", "cleaned_pdfs")
+PARSED_DIR = os.path.join(BASE_DIR, "data", "parsed")
+IMAGE_DIR = os.path.join(BASE_DIR, "data", "images")
+PAGE_RENDER_DIR = os.path.join(BASE_DIR, "data", "page_renders")
 
 os.makedirs(PARSED_DIR, exist_ok=True)
 os.makedirs(IMAGE_DIR, exist_ok=True)

@@ -3,7 +3,8 @@ import json
 import hashlib
 from typing import Optional, Dict, Any
 
-CACHE_DIR = "data/cache"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CACHE_DIR = os.path.join(BASE_DIR, "data", "cache")
 MANIFEST_PATH = os.path.join(CACHE_DIR, "manifest.json")
 
 os.makedirs(CACHE_DIR, exist_ok=True)

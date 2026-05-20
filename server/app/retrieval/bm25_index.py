@@ -4,7 +4,8 @@ import json
 from rank_bm25 import BM25Okapi
 
 
-PARSED_DIR = "data/parsed"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PARSED_DIR = os.path.join(BASE_DIR, "data", "parsed")
 
 
 all_chunks = []

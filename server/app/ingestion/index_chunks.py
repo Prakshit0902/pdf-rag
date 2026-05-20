@@ -9,7 +9,8 @@ from app.vectorstore.store import (
 )
 
 BATCH_SIZE = 100
-PARSED_DIR = "data/parsed"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PARSED_DIR = os.path.join(BASE_DIR, "data", "parsed")
 
 
 def load_all_chunks():

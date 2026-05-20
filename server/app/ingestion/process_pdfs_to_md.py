@@ -5,9 +5,10 @@ from app.parsing.parser import parse_pdf
 from app.parsing.extract_images import extract_images_from_pdf
 
 
-INPUT_DIR = "data/cleaned_pdfs"
-PARSED_DIR = "data/parsed"
-IMAGE_DIR = "data/images"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+INPUT_DIR = os.path.join(BASE_DIR, "data", "cleaned_pdfs")
+PARSED_DIR = os.path.join(BASE_DIR, "data", "parsed")
+IMAGE_DIR = os.path.join(BASE_DIR, "data", "images")
 
 
 os.makedirs(PARSED_DIR, exist_ok=True)

@@ -2,7 +2,8 @@ import os
 import json
 
 
-PARSED_DIR = "data/parsed"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PARSED_DIR = os.path.join(BASE_DIR, "data", "parsed")
 
 
 document_cache = {}

@@ -16,10 +16,12 @@ from app.ingestion.cache import (
     mark_indexed,
 )
 
-INPUT_DIR = "data/cleaned_pdfs"
-PARSED_DIR = "data/parsed"
-IMAGE_DIR = "data/images"
-PAGE_RENDER_DIR = "data/page_renders"
+# Resolve absolute paths relative to the server root directory to prevent CWD dependency
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+INPUT_DIR = os.path.join(BASE_DIR, "data", "cleaned_pdfs")
+PARSED_DIR = os.path.join(BASE_DIR, "data", "parsed")
+IMAGE_DIR = os.path.join(BASE_DIR, "data", "images")
+PAGE_RENDER_DIR = os.path.join(BASE_DIR, "data", "page_renders")
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 ALLOWED_EXTENSIONS = {".pdf"}
