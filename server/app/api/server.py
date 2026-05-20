@@ -27,11 +27,23 @@ app = FastAPI(title="PDF RAG API", version="1.0.0")
 
 # Configure CORS origins via the ALLOWED_ORIGINS environment variable.
 # Example: ALLOWED_ORIGINS="https://your-site.vercel.app,https://www.your-site.com"
-raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+node_env = os.getenv("NODE_ENV", "development").lower()
+is_prod = node_env == "production"
+
+default_origins = "https://pdf-rag-nu-one.vercel.app" if is_prod else "http://localhost:3000"
+raw_origins = os.getenv("ALLOWED_ORIGINS", default_origins)
+
 if raw_origins.strip() == "*":
     origins = ["*"]
 else:
-    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+    origins = []
+    for o in raw_origins.split(","):
+        o = o.strip()
+        if o:
+            # Strip trailing slash if present (except for file schemas or empty strings)
+            if o.endswith("/") and not o.startswith("file:"):
+                o = o.rstrip("/")
+            origins.append(o)
 
 # When using wildcard origins, browsers disallow credentials. Disable credentials
 # automatically in that case to avoid CORS errors.

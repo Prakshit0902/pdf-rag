@@ -267,9 +267,13 @@ pdf-rag/
 
 ### 1. Environment Variables
 
-Create `server/.env` with the following configuration:
+Create `server/.env` and `web/.env` with the following configurations:
 
+#### Backend Variables (`server/.env`):
 ```env
+# Environment Mode (production / development)
+NODE_ENV=development
+
 # Google Gemini API Key
 GEMINI_API_KEY=your_google_gemini_api_key
 
@@ -284,10 +288,22 @@ QDRANT_URL=https://your-qdrant-cluster.io:6333
 QDRANT_API_KEY=your_qdrant_api_key
 
 # CORS Configuration (Comma-separated list of origins, or "*" for wildcard)
+# In production, default fallback matches your deployed frontend URL
 ALLOWED_ORIGINS=http://localhost:3000,https://your-app.vercel.app
 
 # Optional (HuggingFace Integration)
 HF_TOKEN=your_huggingface_token
+```
+
+#### Frontend Variables (`web/.env`):
+```env
+# Environment Mode (production / development)
+NODE_ENV=development
+
+# Base API URL used in production (falls back to localhost:8000 in development)
+NEXT_BASE_API_URL=https://your-api-server.com
+NEXT_PUBLIC_BASE_API_URL=https://your-api-server.com
+NEXT_PUBLIC_API_URL=https://your-api-server.com
 ```
 
 ### 2. Qdrant Setup

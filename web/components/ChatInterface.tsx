@@ -8,8 +8,27 @@ interface Message {
   content: string;
 }
 
+const getApiBaseUrl = () => {
+  const nodeEnv = (
+    process.env.NEXT_PUBLIC_NODE_ENV || 
+    process.env.NODE_ENV || 
+    "development"
+  ).toLowerCase();
+
+  if (nodeEnv === "production") {
+    return (
+      process.env.NEXT_PUBLIC_BASE_API_URL ||
+      process.env.NEXT_BASE_API_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "https://pdf-rag-wjgd.onrender.com"
+    );
+  }
+  return "http://localhost:8000";
+};
+
+const API_BASE = getApiBaseUrl();
+
 export default function ChatInterface() {
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
