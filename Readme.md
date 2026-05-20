@@ -1,6 +1,8 @@
 # PDF RAG
 
-A production-grade Retrieval-Augmented Generation (RAG) system for PDF documents. Provides both an interactive CLI for power users and a web interface for visual document Q&A. Supports hybrid retrieval (dense + sparse), cross-encoder reranking, parent context expansion, agentic query planning, and multimodal context (embedded images + page renders).
+A production-grade Retrieval-Augmented Generation (RAG) system for PDF documents. Provides both an interactive CLI for power users and a web interface for visual document Q&A. Supports hybrid retrieval (dense + sparse), cloud-based cross-encoder reranking, parent context expansion, agentic query planning, caching, and multimodal context (embedded images + page renders).
+
+---
 
 ## System Architecture
 
@@ -20,15 +22,17 @@ flowchart TB
     end
 
     subgraph Pipeline["Processing Pipeline"]
+        CACHE{Cache Lookup<br/>SHA-256 Hash}
+        DET{PDF Detector<br/>PyMuPDF}
         IMG[Extract Images<br/>PyMuPDF]
         REN[Render Pages<br/>pdf2image]
-        PARSE[Parse to Markdown<br/>LlamaParse]
+        PARSE[Parse Text<br/>PyMuPDF / LlamaParse]
         CHUNK[Semantic Chunking<br/>tiktoken]
-        INDEX[Generate Embeddings<br/>BAAI/bge-m3]
+        INDEX[Generate Embeddings<br/>gemini-embedding-2]
     end
 
     subgraph Storage["Storage Layer"]
-        QD[(Qdrant<br/>Vector Store<br/>:6333)]
+        QD[(Qdrant<br/>Local/Cloud Store)]
         FS[(File System<br/>data/)]
     end
 
@@ -36,7 +40,7 @@ flowchart TB
         VEC[Vector Search<br/>Cosine Similarity]
         BM[BM25 Search<br/>rank_bm25]
         MERGE[Merge + Dedup]
-        RERANK[Cross-Encoder<br/>ms-marco-MiniLM]
+        RERANK[Cloud Reranker<br/>jina-reranker-v2]
         PARENT[Parent Context<br/>Window Expansion]
     end
 
@@ -52,10 +56,15 @@ flowchart TB
     end
 
     FU --> UPLOAD
-    UPLOAD --> BP
+    UPLOAD --> CACHE
+    CACHE -->|Miss| BP
+    CACHE -->|Hit| API
+    BP --> DET
+    DET -->|Selectable Text| PARSE
+    DET -->|Scanned/Mixed| PARSE
     BP --> IMG --> FS
     BP --> REN --> FS
-    BP --> PARSE --> CHUNK
+    PARSE --> CHUNK
     CHUNK --> FS
     CHUNK --> INDEX --> QD
 
@@ -74,6 +83,8 @@ flowchart TB
     GEMINI --> MR
 ```
 
+---
+
 ## Data Flow Diagrams
 
 ### Ingestion Pipeline (PDF Upload)
@@ -82,28 +93,44 @@ flowchart TB
 sequenceDiagram
     participant U as User/UI
     participant API as FastAPI
+    participant Cache as Cache Manifest
     participant FS as File System
     participant P as Processor
     participant Q as Qdrant
 
     U->>API: POST /upload (PDF file)
     API->>API: Validate file (type, size <= 50MB)
-    API->>FS: Save to data/cleaned_pdfs/
-    API-->>U: 202 Accepted { job_id }
+    API->>API: Compute SHA-256 Hash
 
-    par Background Processing
-        API->>P: process_pdf_pipeline(job_id)
-        P->>FS: Extract embedded images (PyMuPDF) -> data/images/
-        P->>FS: Render pages as PNG (pdf2image) -> data/page_renders/
-        P->>P: Parse PDF to markdown (LlamaParse)
-        P->>P: Semantic chunking with overlap (tiktoken)
-        P->>FS: Save chunks JSON -> data/parsed/{filename}.json
-        P->>P: Generate embeddings (BAAI/bge-m3)
-        P->>Q: Upsert chunk vectors
-        P->>API: Mark job as completed
+    API->>Cache: Check hash in manifest.json
+    alt Cache Hit (Already Processed)
+        Cache-->>API: Cache entry found
+        API-->>U: 200 OK { status: "cached", filename }
+    else Cache Miss (New File)
+        Cache-->>API: Not found
+        API->>FS: Save to data/cleaned_pdfs/
+        API-->>U: 202 Accepted { job_id, status: "pending" }
+        
+        par Background Processing
+            API->>P: process_pdf_pipeline(job_id, hash)
+            P->>FS: Extract embedded images (PyMuPDF) -> data/images/
+            P->>FS: Render pages as PNG (pdf2image) -> data/page_renders/
+            P->>P: Detect PDF Type (Selectable vs Scanned/Mixed)
+            alt Selectable Text
+                P->>P: Extract text locally via PyMuPDF (fast)
+            else Scanned/Mixed PDF
+                P->>P: Extract text via LlamaParse (OCR fallback)
+            end
+            P->>P: Semantic chunking with overlap (tiktoken)
+            P->>FS: Save chunks JSON -> data/parsed/{filename}.json
+            P->>P: Generate embeddings (gemini-embedding-2 in batch sizes of 100)
+            P->>Q: Upsert chunk vectors
+            P->>Cache: Save hash & metadata to manifest.json
+            P->>API: Mark job as completed
+        end
     end
 
-    loop Every 2 seconds
+    loop Every 2 seconds (If Status is Pending/Processing)
         U->>API: GET /upload/status/{job_id}
         API-->>U: { status: "processing" | "completed" | "failed" }
     end
@@ -118,10 +145,11 @@ sequenceDiagram
     participant M as Memory
     participant QP as Query Planner
     participant R as Retriever
+    participant J as Jina Reranker Cloud
     participant G as Gemini LLM
 
     U->>API: POST /chat { question }
-    API->>M: Get conversation history
+    API->>M: Get conversation history (last 5 messages)
     API->>API: Rewrite query with context
     API->>QP: Generate search queries
 
@@ -133,19 +161,22 @@ sequenceDiagram
     end
 
     loop For each query
-        QP->>R: Hybrid retrieval (vector + BM25)
+        QP->>R: Hybrid retrieval (Gemini Vector + BM25)
         R->>R: Merge results
-        R->>R: Cross-encoder reranking
-        R->>R: Parent context expansion
-        R-->>QP: Scored + ranked chunks
+        R->>J: POST /rerank (jina-reranker-v2-base-multilingual)
+        J-->>R: Reranked relevance scores
+        R->>R: Parent context expansion (+1/-1 window chunks)
+        R-->>QP: Scored + ranked expanded chunks
     end
 
     QP->>R: Deduplicate evidence
     R->>G: Build context + prompt
-    G-->>API: Stream generated answer
+    G-->>API: Stream generated answer (gemini-3.1-flash-lite)
     API-->>U: Stream response tokens
     API->>M: Store Q&A in history
 ```
+
+---
 
 ## Project Structure
 
@@ -155,8 +186,10 @@ pdf-rag/
     main.py                        # CLI entry point (interactive QA loop)
     pyproject.toml                 # Project metadata (Python >= 3.14)
     requirements.txt               # Python dependencies
-    .env                           # API keys (gitignored)
+    .env                           # API keys & Configuration (gitignored)
     data/
+      cache/                       # Ingestion cache directory
+        manifest.json              # SHA-256 PDF file cache index
       cleaned_pdfs/                # Uploaded PDF source files
       images/                      # Extracted embedded images (per-PDF folders)
       page_renders/                # Rendered page PNG images (per-PDF folders)
@@ -168,16 +201,17 @@ pdf-rag/
         evidence.py                # Evidence gathering across multiple queries with deduplication
         reflection.py              # Critique agent for answer sufficiency evaluation
       api/
-        server.py                  # FastAPI application with CORS, /chat streaming, /upload endpoints
-        upload.py                  # PDF upload handler with background pipeline processing and job tracking
+        server.py                  # FastAPI application with CORS, /chat streaming, health, and status endpoints
+        upload.py                  # PDF upload handler with cache checking and background pipeline processing
       embeddings/
-        embedder.py                # Sentence-transformers (BAAI/bge-m3) with local inference
+        embedder.py                # Gemini embedding generator (gemini-embedding-2) with batching support
         inference_embedder.py      # HuggingFace InferenceClient (BAAI/bge-m3) as alternative
       eval/
         evaluator.py               # LLM-based RAG evaluation (groundedness, hallucination, relevance, completeness)
       ingestion/
+        cache.py                   # Ingestion cache API (SHA-256 hash checking & manifest writing)
         chunker.py                 # Semantic text chunker with overlap, token-count aware (tiktoken)
-        index_chunks.py            # Load parsed JSON, generate embeddings, index to Qdrant
+        index_chunks.py            # Load parsed JSON, generate batch embeddings, index to Qdrant
         process_pdfs.py            # Full pipeline: extract images -> render pages -> parse -> chunk -> save JSON
         process_pdfs_to_md.py      # Simplified pipeline: parse PDFs to markdown only
       llm/
@@ -185,7 +219,9 @@ pdf-rag/
       memory/
         memory.py                  # In-memory conversation history (last 5 messages)
       parsing/
-        parser.py                  # PDF to structured markdown via LlamaParse + llama-index
+        detector.py                # PyMuPDF-based PDF type detector (selectable vs scanned vs mixed)
+        parser.py                  # PyMuPDF fast local text parser with LlamaParse fallback
+        pymupdf_parser.py          # Fast local parser for selectable-text PDFs
         extract_images.py          # Embedded image extraction using PyMuPDF (fitz)
         render_pages.py            # Page-level rendering to PNG using pdf2image
       qa/
@@ -195,10 +231,10 @@ pdf-rag/
       retrieval/
         retrieve.py                # Hybrid retrieval orchestrator (vectors BM25 merge rerank expand)
         bm25_index.py              # BM25 keyword search index using rank_bm25
-        reranker.py                # Cross-encoder reranking (ms-marco-MiniLM-L-6-v2)
+        reranker.py                # Cloud reranking using Jina AI (jina-reranker-v2-base-multilingual)
         parent_retrieval.py        # Neighboring chunk expansion for richer context
       vectorstore/
-        qdrant_client.py           # Qdrant client connection (localhost:6333)
+        qdrant_client.py           # Qdrant client connection (Local or Cloud)
         store.py                   # Collection creation and chunk upsertion
   web/                             # Next.js frontend
     app/
@@ -206,7 +242,7 @@ pdf-rag/
       layout.tsx                   # Root layout with Geist fonts
       globals.css                  # Tailwind CSS v4 with dark mode support
     components/
-      FileUpload.tsx               # Drag-and-drop PDF upload with progress bar and job polling
+      FileUpload.tsx               # Drag-and-drop PDF upload with progress bar, cache-hit feedback, and polling
       ChatInterface.tsx            # Streaming chat widget with message history
       MarkdownRenderer.tsx         # Client-side markdown renderer (bold, italic, code, lists)
     package.json                   # Next.js 16.2.6, React 19.2.4, TypeScript, Tailwind CSS 4
@@ -216,35 +252,52 @@ pdf-rag/
     postcss.config.mjs             # PostCSS with Tailwind CSS
 ```
 
+---
+
 ## Prerequisites
 
 - **Python >= 3.14** (required for the FastAPI backend)
 - **Node.js >= 18** (required for the Next.js frontend)
-- **Qdrant** running on `localhost:6333` (vector store)
-- **API Keys** for Google Gemini, LlamaParse, and optionally HuggingFace
+- **Qdrant** running locally (`localhost:6333`) or a **Qdrant Cloud** instance
+- **API Keys** for Google Gemini (embeddings & generation), Jina AI (reranking), and LlamaParse (fallback OCR)
+
+---
 
 ## Setup
 
 ### 1. Environment Variables
 
-Create `server/.env` with the following keys:
+Create `server/.env` with the following configuration:
 
 ```env
-LLAMA_CLOUD_API_KEY=your_llamaparse_api_key
+# Google Gemini API Key
 GEMINI_API_KEY=your_google_gemini_api_key
-HF_TOKEN=your_huggingface_token         # optional, only needed for inference embedder
+
+# Jina AI Cloud Reranker API Key
+JINA_API_KEY=your_jina_api_key
+
+# Llama Cloud API Key (Only used as OCR fallback for scanned/mixed PDFs)
+LLAMA_CLOUD_API_KEY=your_llamaparse_api_key
+
+# Qdrant Configuration (Defaults to http://localhost:6333 if omitted)
+QDRANT_URL=https://your-qdrant-cluster.io:6333
+QDRANT_API_KEY=your_qdrant_api_key
+
+# CORS Configuration (Comma-separated list of origins, or "*" for wildcard)
+ALLOWED_ORIGINS=http://localhost:3000,https://your-app.vercel.app
+
+# Optional (HuggingFace Integration)
+HF_TOKEN=your_huggingface_token
 ```
 
-### 2. Qdrant (Vector Store)
-
-Start Qdrant using Docker:
+### 2. Qdrant Setup
+If running Qdrant locally, start it using Docker:
 
 ```bash
 docker run -d --name qdrant -p 6333:6333 qdrant/qdrant
 ```
 
 Verify it is running:
-
 ```bash
 curl http://localhost:6333/collections
 ```
@@ -273,6 +326,8 @@ cd web
 npm install
 ```
 
+---
+
 ## Usage
 
 ### CLI Mode (Interactive Question-Answer Loop)
@@ -292,7 +347,6 @@ python main.py
 ```
 
 Once started, you will see:
-
 ```
 PDF RAG System Ready
 
@@ -302,48 +356,9 @@ Ask Question:
 Type your questions and press Enter. The system will:
 1. Rewrite your question using conversation context
 2. Generate optimized search queries via the two-stage planner
-3. Retrieve evidence using hybrid search (vector + BM25 + reranker)
-4. Generate an answer using Google Gemini
+3. Retrieve evidence using hybrid search (Gemini Vector + BM25 + Jina Reranker)
+4. Generate an answer using Google Gemini (`gemini-3.1-flash-lite`)
 5. Display the answer along with search queries, sources, and relevance scores
-
-Example output:
-
-```
-Ask Question: What is the main topic of this document?
-
-====================
-
-========== SEARCH QUERIES ==========
-
-- main topic document overview
-- document key themes and subjects
-- central focus of the document
-- primary subjects discussed
-
-Rewritten Query: What is the main topic and central subject of the document?
-
-The document primarily discusses ...
-
-
-========== SOURCES ==========
-
-        CHUNK: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-
-        FILE: 1.pdf
-
-        PAGE: 1
-
-        VECTOR: 0.8921
-
-        BM25: 0.7543
-
-        RERANK: 8.2345
-
-        PREVIEW:
-        ...
-
-        ----------------------------
-```
 
 Type `exit` or `quit` to stop the CLI.
 
@@ -352,26 +367,21 @@ Type `exit` or `quit` to stop the CLI.
 Run the backend API server and the frontend development server simultaneously.
 
 **Terminal 1 - Backend API Server:**
-
 ```bash
 cd server
 uvicorn app.api.server:app --reload --host 0.0.0.0 --port 8000
 ```
-
 The API server starts at `http://localhost:8000` with interactive docs at `http://localhost:8000/docs`.
 
 **Terminal 2 - Frontend Dev Server:**
-
 ```bash
 cd web
 npm run dev
 ```
-
 The Next.js frontend starts at `http://localhost:3000`.
 
 Open `http://localhost:3000` in a browser. The UI presents two panels:
-
-- **Left Panel (Upload PDF)**: Drag-and-drop or click to upload a PDF. Displays upload progress, processing status, and a progress bar. Polls the job status every 2 seconds until completion.
+- **Left Panel (Upload PDF)**: Drag-and-drop or click to upload a PDF. Displays upload progress, processing status, and a progress bar. Includes support for instant cache-hits (if a document has been processed previously, ingestion completes instantly).
 - **Right Panel (Chat)**: Ask questions about the uploaded PDF. Responses are streamed in real-time with markdown rendering (bold, italic, code blocks, lists).
 
 ### Production Deployment
@@ -391,6 +401,8 @@ cd server
 uvicorn app.api.server:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
+---
+
 ## API Reference
 
 ### Chat
@@ -399,15 +411,14 @@ uvicorn app.api.server:app --host 0.0.0.0 --port 8000 --workers 4
 
 Ask a question and receive a streaming markdown response.
 
-Request body:
-
+*Request Body:*
 ```json
 {
   "question": "What is the main finding in chapter 3?"
 }
 ```
 
-Response: `text/plain` streaming response with markdown-formatted answer.
+*Response:* `text/plain` streaming response with markdown-formatted answer.
 
 ### Upload PDF
 
@@ -417,12 +428,22 @@ Upload a PDF file for processing. Accepted as `multipart/form-data`.
 
 - Maximum file size: 50 MB
 - Accepted format: PDF only
-- Returns a `job_id` for tracking background processing status
+- Computes SHA-256 hash to check for cache hits. If the document is cached, returns a `200 OK` status immediately, skipping pipeline execution.
+- If not cached, returns a `202 Accepted` status with a `job_id` for tracking background processing.
 
-Request: `multipart/form-data` with field name `file`.
+*Request:* `multipart/form-data` with field name `file`.
 
-Response (202 Accepted):
+*Response (200 OK - Cache Hit):*
+```json
+{
+  "message": "File already processed (cached)",
+  "filename": "document.pdf",
+  "parsed_path": "data/parsed/document.json",
+  "status": "cached"
+}
+```
 
+*Response (202 Accepted - New File Ingestion Started):*
 ```json
 {
   "message": "File uploaded successfully, processing started",
@@ -438,8 +459,7 @@ Response (202 Accepted):
 
 Poll the processing status of an uploaded PDF.
 
-Response:
-
+*Response:*
 ```json
 {
   "job_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -465,178 +485,99 @@ List all upload processing jobs.
 
 List all uploaded PDF files on the server.
 
-Response:
-
+*Response:*
 ```json
 {
   "files": ["document.pdf", "report.pdf"]
 }
 ```
 
-## Ingestion
+### Health Check
 
-### Via Web UI
+**GET** / **HEAD** `/health`
 
-1. Open `http://localhost:3000`
-2. Drag a PDF onto the upload panel or click to select a file
-3. Wait for processing to complete (progress bar updates automatically)
-4. Start asking questions in the chat panel
+Get system status and health probes. The `HEAD` method returns an empty body for fast, lightweight heartbeat checks.
 
-### Via CLI (Batch Processing)
-
-Place PDF files directly into `server/data/cleaned_pdfs/` and run the ingestion pipeline manually:
-
-```bash
-cd server
-
-# Step 1: Process PDFs (extract images, render pages, parse, and chunk)
-python -m app.ingestion.process_pdfs
-
-# Step 2: Index chunks into Qdrant
-python -m app.ingestion.index_chunks
+*Response (GET):*
+```json
+{
+  "status": "ok",
+  "uptime_seconds": 12345
+}
 ```
 
-### Via API
+---
 
-```bash
-curl -X POST http://localhost:8000/upload \
-  -F "file=@/path/to/document.pdf"
-```
+## Ingestion Pipeline Details
 
-## Retrieval Pipeline Details
+The system handles document processing through an optimized workflow:
 
-The system uses a multi-stage hybrid retrieval strategy to maximize both precision and recall:
+1. **SHA-256 Hashing**: Checks the file hash against `data/cache/manifest.json`. If it exists, the pipeline instantly completes.
+2. **Visual Asset Extraction**: Extracts embedded images and renders pages to PNGs for visual QA support.
+3. **Smart Parsing**: 
+   - Selectable text PDFs are parsed locally using **PyMuPDF**, which takes a few milliseconds and does not require cloud APIs.
+   - Scanned or mixed PDFs fall back to **LlamaParse**'s high-fidelity OCR engine.
+4. **Token-Aware Semantic Chunking**: Splits document text into chunks based on semantic paragraphs while keeping track of token lengths using `tiktoken` to optimize boundaries.
+5. **Batch Embedding**: Converts chunks to vectors using `gemini-embedding-2` in batches of 100 to maximize performance.
+6. **Vector Indexing**: Saves vectors to Qdrant (local or cloud) alongside chunk text, metadata, and rendering paths.
 
-```mermaid
-flowchart LR
-    Q[User Query]
-    V[Vector Search<br/>Qdrant + bge-m3]
-    B[BM25 Search<br/>rank_bm25]
-    M[Merge + Dedup]
-    R[Cross-Encoder<br/>Reranking]
-    P[Parent Context<br/>Expansion]
-    A[LLM Answer]
+---
 
-    Q --> V
-    Q --> B
-    V --> M
-    B --> M
-    M --> R
-    R --> P
-    P --> A
-```
+## Retrieval & Generation Details
 
 ### Stage 1: Dense Vector Search
-
-- **Model**: BAAI/bge-m3 via sentence-transformers
-- **Store**: Qdrant vector database (cosine distance)
+- **Model**: `gemini-embedding-2` via Google Gemini
+- **Store**: Qdrant Vector DB (Cosine distance)
 - **Top-K**: 10 results
-- Embeds the query, searches the vector index, returns chunks with cosine similarity scores
 
 ### Stage 2: BM25 Sparse Search
-
-- **Algorithm**: BM25Okapi via rank_bm25
+- **Algorithm**: `BM25Okapi` via `rank_bm25`
 - **Top-K**: 10 results
-- Tokenizes both the query and all document chunks, scores based on term frequency and inverse document frequency
+- Performs keyword-level lexical matching on tokenized document chunks.
 
 ### Stage 3: Merge and Deduplicate
+- Combines dense vector and BM25 sparse search results into a unified list.
+- Deduplicates chunks based on their unique UUIDs while preserving their relative search metrics.
 
-- Combines vector and BM25 results into a single unified list
-- Deduplicates by chunk ID, preserving scores from both retrievers
-- Chunks found by both retrievers retain both vector and BM25 scores
-
-### Stage 4: Cross-Encoder Reranking
-
-- **Model**: cross-encoder/ms-marco-MiniLM-L-6-v2
+### Stage 4: Cloud Cross-Encoder Reranking
+- **Model**: `jina-reranker-v2-base-multilingual` via Jina AI Cloud API
 - **Top-K**: 5 results after reranking
-- Evaluates query-chunk pairs jointly (not just embedding similarity), producing more accurate relevance scores
-- Reranked chunks sorted by descending rerank score
+- Scores query-chunk pairs jointly, resolving semantic nuances that embedding models alone may miss.
 
 ### Stage 5: Parent Context Expansion
+- Retrieves neighboring chunks (prev/next chunks) from the parsed document structure to give the generator richer surrounding context.
 
-- Window size: 1 (includes one chunk before and after each retrieved chunk)
-- Loads the full document JSON and expands each retrieved chunk with its immediate neighbors
-- Preserves all retrieval scores for the originally retrieved chunk
+### Stage 6: Generation & Evaluation
+- **LLM**: Google Gemini (`gemini-3.1-flash-lite`) with streaming enabled.
+- **Evaluation**: The answer is graded by an LLM-based evaluator scoring Groundedness, Hallucination Risk, Context Relevance, and Completeness on a 0-10 scale.
 
-## Agentic Pipeline Details
-
-```mermaid
-flowchart TB
-    Q[User Question]
-    R[Query Rewriter]
-    P[Query Planner]
-    E[Evidence Gatherer]
-    G[Gemini LLM]
-    A[Answer]
-
-    Q --> R
-    R --> P
-    P --> E
-    E --> G
-    G --> A
-    A --> C{Critique<br/>Sufficient?}
-    C -->|Yes| Out[Return Answer]
-    C -->|No| P
-```
-
-### Query Rewriting
-
-- Maintains conversation history (last 5 messages)
-- Rewrites the user's question to be self-contained, resolving pronouns and references
-- Preserves the original meaning while incorporating context from previous turns
-
-### Two-Stage Query Planning
-
-1. **Stage 1**: Quick initial retrieval to understand the document domain
-2. **Stage 2**: Generates up to 4 context-aware search queries based on the retrieved document content
-3. Queries are optimized to explore different facets of the question
-
-### Evidence Gathering
-
-- For each of the generated queries, performs full hybrid retrieval
-- Deduplicates results across all queries
-- Returns a consolidated set of relevant chunks
-
-### Critique / Reflection
-
-- Evaluates the generated answer against the evidence
-- Assesses sufficiency, missing information, and retrieval completeness
-- Can trigger additional search queries if the answer is insufficient
-
-## Evaluation Metrics
-
-The system includes an LLM-based evaluator that scores each answer on four dimensions (0-10 scale):
-
-| Metric             | Description                                      |
-|--------------------|--------------------------------------------------|
-| Groundedness       | Is the answer supported by the retrieved context?|
-| Hallucination Risk | Did the answer invent unsupported claims?        |
-| Context Relevance  | Were the retrieved chunks relevant to the question?|
-| Completeness       | Did the answer fully address the question?       |
+---
 
 ## Tech Stack
 
-| Layer              | Technology                                           |
-|--------------------|------------------------------------------------------|
-| Backend Framework  | Python 3.14+, FastAPI, Uvicorn                       |
-| Frontend           | Next.js 16.2.6, React 19.2.4, TypeScript, Tailwind CSS 4 |
-| LLM                | Google Gemini (gemini-3.1-flash-lite)                |
-| Vector Store       | Qdrant (localhost:6333, cosine distance)             |
-| PDF Parsing        | LlamaParse, PyMuPDF (fitz), pdf2image                |
-| Embeddings         | BAAI/bge-m3 (sentence-transformers)                  |
-| Reranking          | cross-encoder/ms-marco-MiniLM-L-6-v2                 |
-| Keyword Search     | rank_bm25 (BM25Okapi)                                |
-| Text Chunking      | tiktoken (cl100k_base encoding)                      |
-| Package Manager    | pip (Python), npm (Node.js)                          |
+| Layer | Technology |
+| :--- | :--- |
+| **Backend Framework** | Python 3.14+, FastAPI, Uvicorn |
+| **Frontend UI** | Next.js 16.2.6, React 19.2.4, TypeScript, Tailwind CSS 4 |
+| **LLM Generation** | Google Gemini (`gemini-3.1-flash-lite`) |
+| **Embeddings API** | `gemini-embedding-2` (Google Gemini with batch size of 100) |
+| **Vector Database** | Qdrant (Local Docker or Qdrant Cloud, Cosine distance) |
+| **Reranking Engine** | Jina AI Cloud (`jina-reranker-v2-base-multilingual`) |
+| **PDF Parsing & OCR** | PyMuPDF (Fast selectable text) & LlamaParse (OCR fallback) |
+| **Token Tracking** | `tiktoken` (cl100k_base encoding) |
+| **Caching Store** | Local file hashing cache (`data/cache/manifest.json`) |
+| **Keyword Search** | `rank_bm25` (BM25Okapi) |
+
+---
 
 ## Troubleshooting
 
-| Problem                          | Solution                                               |
-|----------------------------------|--------------------------------------------------------|
-| Qdrant connection refused        | Ensure Docker container is running: `docker start qdrant` |
-| LlamaParse API error             | Verify `LLAMA_CLOUD_API_KEY` is set in server/.env     |
-| Gemini API error                 | Verify `GEMINI_API_KEY` is set in server/.env          |
-| No chunks retrieved              | Run `python -m app.ingestion.index_chunks` to index PDFs |
-| PDF upload fails                 | Check file is valid PDF and under 50MB                 |
-| CORS error in browser            | Ensure backend is running on port 8000 and frontend on 3000 |
-| ImportError on startup           | Activate virtual environment and run `pip install -r requirements.txt` |
+| Problem | Solution |
+| :--- | :--- |
+| **Qdrant connection refused** | If local: check Docker is running: `docker start qdrant`. If cloud: check `QDRANT_URL` and `QDRANT_API_KEY` in `.env`. |
+| **LlamaParse API error** | Verify `LLAMA_CLOUD_API_KEY` is active and correctly pasted in `server/.env`. |
+| **Gemini API error** | Verify `GEMINI_API_KEY` has active quotas for generation and embeddings. |
+| **Jina Reranker error** | Ensure `JINA_API_KEY` is set in `server/.env` and has sufficient credits. |
+| **No chunks retrieved** | If indexing was skipped or failed, run `python -m app.ingestion.index_chunks` manually. |
+| **CORS error in browser** | Check `ALLOWED_ORIGINS` in your `server/.env` includes your frontend URL (e.g. `http://localhost:3000`). |
+| **ImportError on startup** | Ensure your virtual environment is active (`.venv\Scripts\activate` or `source .venv/bin/activate`) and dependencies are up to date (`pip install -r requirements.txt`). |
