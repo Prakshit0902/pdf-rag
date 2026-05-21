@@ -1,27 +1,29 @@
-from app.retrieval.retrieve import retrieve_chunks
+from app.retrieval.retrieve import retrieve_chunks, retrieve_chunks_async
 
 from app.memory.memory import (
     add_message
 )
 
 from app.qa.query_rewriter import (
-    rewrite_query
+    rewrite_query,
+    rewrite_query_async
 )
 
 from app.llm.gemini import (
-    stream_answer
+    stream_answer,
+    stream_answer_async
 )
 
 from app.qa.ask import build_context
 
 
-def stream_question(question: str):
+async def stream_question(question: str):
 
-    rewritten_question = rewrite_query(
+    rewritten_question = await rewrite_query_async(
         question
     )
 
-    chunks = retrieve_chunks(
+    chunks = await retrieve_chunks_async(
         rewritten_question
     )
 
@@ -84,7 +86,7 @@ Provide a well-formatted answer in markdown. List sources at the end as:
 
     final_answer = ""
 
-    for token in stream_answer(
+    async for token in stream_answer_async(
         prompt,
         image_paths=image_paths + page_renders
     ):

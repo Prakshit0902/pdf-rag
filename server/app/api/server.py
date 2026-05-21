@@ -66,7 +66,7 @@ class ChatRequest(BaseModel):
 @app.post("/chat")
 async def chat(request: ChatRequest):
     async def event_generator():
-        for token in stream_question(request.question):
+        async for token in stream_question(request.question):
             yield token
 
     return StreamingResponse(

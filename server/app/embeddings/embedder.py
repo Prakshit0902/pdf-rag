@@ -39,4 +39,33 @@ def get_embeddings_batch(
             title=title
         )
     )
-    return [e.values for e in result.embeddings]
+    return [e.values for e in result.embeddings]
+
+
+async def get_embedding_async(text: str, task_type: str = "RETRIEVAL_QUERY"):
+    result = await client.aio.models.embed_content(
+        model=MODEL_NAME,
+        contents=text,
+        config=types.EmbedContentConfig(
+            task_type=task_type
+        )
+    )
+    return result.embeddings[0].values
+
+
+async def get_embeddings_batch_async(
+    texts: list[str],
+    task_type: str = "RETRIEVAL_DOCUMENT",
+    title: str = None
+) -> list[list[float]]:
+    content_list = [types.Content(parts=[types.Part.from_text(text=t)]) for t in texts]
+    result = await client.aio.models.embed_content(
+        model=MODEL_NAME,
+        contents=content_list,
+        config=types.EmbedContentConfig(
+            task_type=task_type,
+            title=title
+        )
+    )
+    return [e.values for e in result.embeddings]
+

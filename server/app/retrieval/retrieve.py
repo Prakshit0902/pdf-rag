@@ -1,8 +1,10 @@
-from app.embeddings.embedder import get_embedding
+from functools import partial
+import anyio
+from app.embeddings.embedder import get_embedding, get_embedding_async
 
 from app.vectorstore.qdrant_client import client
 
-from app.retrieval.reranker import rerank_chunks
+from app.retrieval.reranker import rerank_chunks, rerank_chunks_async
 from app.retrieval.bm25_index import bm25_search
 from app.retrieval.parent_retrieval import expand_parent_context
 
@@ -101,3 +103,60 @@ def retrieve_chunks(
     )
     
     return expanded_chunks
+
+
+async def vector_search_async(
+    query: str,
+    limit: int = 10
+):
+    query_embedding = await get_embedding_async(query, task_type="RETRIEVAL_QUERY")
+
+    results = await anyio.to_thread.run_sync(
+        partial(
+            client.query_points,
+            collection_name=COLLECTION_NAME,
+            query=query_embedding,
+            limit=limit
+        )
+    )
+
+    chunks = []
+    for result in results.points:
+        payload = result.payload
+        payload["vector_score"] = result.score
+        payload["id"] = str(result.id)
+        chunks.append(payload)
+
+    return chunks
+
+
+async def retrieve_chunks_async(
+    query: str,
+    vector_limit: int = 10,
+    bm25_limit: int = 10,
+    rerank_top_k: int = 5
+):
+    import asyncio
+    vector_task = vector_search_async(query, limit=vector_limit)
+    bm25_task = anyio.to_thread.run_sync(
+        partial(bm25_search, query, top_k=bm25_limit)
+    )
+
+    vector_chunks, bm25_chunks = await asyncio.gather(vector_task, bm25_task)
+
+    merged_chunks = merge_results(
+        vector_chunks,
+        bm25_chunks
+    )
+
+    reranked_chunks = await rerank_chunks_async(
+        query,
+        merged_chunks,
+        top_k=rerank_top_k
+    )
+
+    expanded_chunks = await anyio.to_thread.run_sync(
+        partial(expand_parent_context, reranked_chunks, window_size=1)
+    )
+
+    return expanded_chunks
