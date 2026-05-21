@@ -69,6 +69,7 @@ def ask_agentic_question(
 You are an advanced multimodal RAG system.
 
 Answer the question using the evidence.
+Exception: If the user asks to solve, answer, or complete questions/tasks/assignments that are listed or found within the document (e.g., a test paper or problem set) and the document itself does not contain the answers/solutions, you should use your own knowledge to solve and answer them, while clearly noting that you are solving/answering the questions from the document using external knowledge.
 
 ORIGINAL QUESTION:
 {question}

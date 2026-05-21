@@ -15,7 +15,7 @@ def vector_search(
     limit: int = 10
 ):
 
-    query_embedding = get_embedding(query)
+    query_embedding = get_embedding(query, task_type="RETRIEVAL_QUERY")
 
     results = client.query_points(
         collection_name=COLLECTION_NAME,

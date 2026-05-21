@@ -102,6 +102,9 @@ async def save_file(file: UploadFile, contents: bytes) -> str:
     safe_filename = os.path.basename(file.filename)
     filepath = os.path.join(INPUT_DIR, safe_filename)
 
+    # Ensure the directory exists dynamically in case it was deleted during runtime
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
     with open(filepath, "wb") as f:
         f.write(contents)
 
@@ -172,6 +175,9 @@ def process_pdf_pipeline(filename: str, job_id: str, pdf_hash: Optional[str] = N
             PARSED_DIR,
             filename.replace(".pdf", ".json")
         )
+
+        # Ensure the directory exists dynamically in case it was deleted during runtime
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(chunks, f, ensure_ascii=False, indent=2)
@@ -270,6 +276,8 @@ def get_all_jobs() -> JSONResponse:
 
 def list_uploaded_files() -> JSONResponse:
     """List all uploaded PDF files."""
+    # Ensure directory exists dynamically to prevent FileNotFoundError during directory listing
+    os.makedirs(INPUT_DIR, exist_ok=True)
     files = [
         f for f in os.listdir(INPUT_DIR)
         if f.endswith(".pdf")

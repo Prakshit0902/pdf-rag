@@ -73,8 +73,9 @@ def ask_question(question: str):
         You are a highly accurate multimodal document QA system.
 
         Answer ONLY from the provided context and images.
+        Exception: If the user asks to solve, answer, or complete questions/tasks/assignments that are listed or found within the document (e.g., a test paper or problem set) and the document itself does not contain the answers/solutions, you should use your own knowledge to solve and answer them, while clearly noting that you are solving/answering the questions from the document using external knowledge.
 
-        If the answer is not present,
+        If the answer is not present in the document and is not a task/question to be solved/answered from the document,
         say:
         "I could not find this in the documents."
 

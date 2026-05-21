@@ -5,6 +5,8 @@ import json
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PARSED_DIR = os.path.join(BASE_DIR, "data", "parsed")
 
+os.makedirs(PARSED_DIR, exist_ok=True)
+
 
 document_cache = {}
 

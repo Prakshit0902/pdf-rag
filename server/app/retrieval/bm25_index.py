@@ -7,6 +7,8 @@ from rank_bm25 import BM25Okapi
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PARSED_DIR = os.path.join(BASE_DIR, "data", "parsed")
 
+os.makedirs(PARSED_DIR, exist_ok=True)
+
 
 all_chunks = []
 tokenized_chunks = []
@@ -45,6 +47,19 @@ def load_chunks():
 load_chunks()
 
 bm25 = BM25Okapi(tokenized_chunks) if tokenized_chunks else None
+
+
+def reload_index():
+    """Reload all chunks from parsed JSON files and rebuild BM25 index."""
+    global all_chunks
+    global tokenized_chunks
+    global bm25
+
+    all_chunks = []
+    tokenized_chunks = []
+    load_chunks()
+    bm25 = BM25Okapi(tokenized_chunks) if tokenized_chunks else None
+    print(f"BM25 index reloaded with {len(all_chunks)} chunks.")
 
 
 def bm25_search(

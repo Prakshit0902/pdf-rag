@@ -11,6 +11,7 @@ PARSED_DIR = os.path.join(BASE_DIR, "data", "parsed")
 IMAGE_DIR = os.path.join(BASE_DIR, "data", "images")
 
 
+os.makedirs(INPUT_DIR, exist_ok=True)
 os.makedirs(PARSED_DIR, exist_ok=True)
 os.makedirs(IMAGE_DIR, exist_ok=True)
 

@@ -12,6 +12,8 @@ BATCH_SIZE = 100
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PARSED_DIR = os.path.join(BASE_DIR, "data", "parsed")
 
+os.makedirs(PARSED_DIR, exist_ok=True)
+
 
 def load_all_chunks():
 
@@ -51,24 +53,46 @@ def main():
 
     print(f"Loaded {len(chunks)} chunks")
 
-    texts = [chunk["text"] for chunk in chunks]
-    embeddings = []
+    # Group chunks by source_file to pass the correct document title
+    from collections import defaultdict
+    grouped_chunks = defaultdict(list)
+    for chunk in chunks:
+        grouped_chunks[chunk.get("source_file", "unknown_document.pdf")].append(chunk)
 
-    total_batches = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
-    for i in range(0, len(texts), BATCH_SIZE):
-        batch = texts[i:i + BATCH_SIZE]
-        batch_num = i // BATCH_SIZE + 1
-        print(f"Embedding batch {batch_num}/{total_batches} ({len(batch)} texts)")
-        batch_embeddings = get_embeddings_batch(batch)
-        embeddings.extend(batch_embeddings)
+    embeddings_dict = {}
+    for source_file, file_chunks in grouped_chunks.items():
+        print(f"Embedding {len(file_chunks)} chunks for document: {source_file}")
+        texts = [c["text"] for c in file_chunks]
+        file_embeddings = []
+        total_batches = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
+        for i in range(0, len(texts), BATCH_SIZE):
+            batch = texts[i:i + BATCH_SIZE]
+            batch_num = i // BATCH_SIZE + 1
+            print(f"  Batch {batch_num}/{total_batches} ({len(batch)} texts)")
+            batch_embeddings = get_embeddings_batch(batch, title=source_file)
+            file_embeddings.extend(batch_embeddings)
+        embeddings_dict[source_file] = file_embeddings
 
-    vector_size = len(embeddings[0])
+    # Reconstruct ordered lists for collection creation and storage
+    ordered_chunks = []
+    ordered_embeddings = []
+    for source_file, file_chunks in grouped_chunks.items():
+        ordered_chunks.extend(file_chunks)
+        ordered_embeddings.extend(embeddings_dict[source_file])
 
-    create_collection(vector_size)
-
-    store_chunks(chunks, embeddings)
+    if ordered_embeddings:
+        vector_size = len(ordered_embeddings[0])
+        create_collection(vector_size)
+        store_chunks(ordered_chunks, ordered_embeddings)
 
     print("Indexing complete")
+
+    # Reload BM25 index to make newly indexed file chunks searchable immediately
+    try:
+        from app.retrieval.bm25_index import reload_index
+        reload_index()
+    except Exception as e:
+        pass
 
 
 def index_single_file(json_path: str) -> None:
@@ -78,6 +102,9 @@ def index_single_file(json_path: str) -> None:
 
     print(f"Indexing {len(chunks)} chunks from {json_path}")
 
+    # Extract title from the source file metadata or fallback to JSON filename
+    title = chunks[0].get("source_file") if chunks else os.path.basename(json_path).replace(".json", ".pdf")
+
     texts = [chunk["text"] for chunk in chunks]
     embeddings = []
 
@@ -86,7 +113,7 @@ def index_single_file(json_path: str) -> None:
         batch = texts[i:i + BATCH_SIZE]
         batch_num = i // BATCH_SIZE + 1
         print(f"  Embedding batch {batch_num}/{total_batches} ({len(batch)} texts)")
-        batch_embeddings = get_embeddings_batch(batch)
+        batch_embeddings = get_embeddings_batch(batch, title=title)
         embeddings.extend(batch_embeddings)
 
     if embeddings:
@@ -95,6 +122,13 @@ def index_single_file(json_path: str) -> None:
         store_chunks(chunks, embeddings)
 
     print(f"Indexed {len(chunks)} chunks")
+
+    # Reload BM25 index to make newly indexed file chunks searchable immediately
+    try:
+        from app.retrieval.bm25_index import reload_index
+        reload_index()
+    except Exception as e:
+        print(f"Failed to reload BM25 index: {e}")
 
 
 if __name__ == "__main__":
