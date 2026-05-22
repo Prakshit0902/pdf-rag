@@ -15,3 +15,6 @@ pdf2image
 pymupdf
 rank-bm25
 httpx
+pyjwt[crypto]
+cryptography
+supabase
