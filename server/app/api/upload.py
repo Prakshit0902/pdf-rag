@@ -122,6 +122,9 @@ def process_pdf_pipeline(filename: str, job_id: str, pdf_hash: Optional[str] = N
 
         pdf_path = os.path.join(INPUT_DIR, filename)
 
+        if not os.path.exists(pdf_path):
+            raise FileNotFoundError(f"PDF file not found at {pdf_path}")
+
         # -------------------------
         # Step 1: Extract Images
         # -------------------------

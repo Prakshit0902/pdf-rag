@@ -23,13 +23,18 @@ def load_document(
         source_file.replace(".pdf", ".json")
     )
 
-    with open(path, "r", encoding="utf-8") as f:
+    if not os.path.exists(path):
+        print(f"Warning: Parsed file {path} not found on disk. Returning empty chunk list.")
+        return []
 
-        chunks = json.load(f)
-
-    document_cache[source_file] = chunks
-
-    return chunks
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            chunks = json.load(f)
+        document_cache[source_file] = chunks
+        return chunks
+    except Exception as e:
+        print(f"Error loading parsed document {path}: {e}")
+        return []
 
 
 def expand_parent_context(

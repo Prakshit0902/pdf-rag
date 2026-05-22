@@ -18,6 +18,7 @@ def _load_manifest() -> Dict[str, Any]:
 
 
 def _save_manifest(manifest: Dict[str, Any]):
+    os.makedirs(CACHE_DIR, exist_ok=True)
     with open(MANIFEST_PATH, "w") as f:
         json.dump(manifest, f, indent=2)
 
@@ -60,6 +61,13 @@ def mark_indexed(file_hash: str):
 
 def is_cached(file_hash: str) -> bool:
     entry = get_cached_entry(file_hash)
-    if entry and os.path.exists(entry.get("parsed_path", "")):
+    if not entry:
+        return False
+    parsed_path = entry.get("parsed_path", "")
+    filename = entry.get("filename", "")
+    # Check if both the parsed output path and original PDF file exist on disk
+    pdf_path = os.path.join(BASE_DIR, "data", "cleaned_pdfs", filename) if filename else ""
+    
+    if os.path.exists(parsed_path) and (not pdf_path or os.path.exists(pdf_path)):
         return True
     return False

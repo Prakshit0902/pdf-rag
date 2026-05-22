@@ -97,6 +97,9 @@ def main():
 
 def index_single_file(json_path: str) -> None:
     """Index a single parsed JSON file to vector store."""
+    if not os.path.exists(json_path):
+        raise FileNotFoundError(f"Parsed JSON file not found for indexing at {json_path}")
+
     with open(json_path, "r", encoding="utf-8") as f:
         chunks = json.load(f)
 

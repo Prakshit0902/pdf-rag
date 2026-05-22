@@ -1,4 +1,5 @@
 import os
+import math
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -12,6 +13,13 @@ client = genai.Client(
 )
 
 
+def normalize_vector(vector: list[float]) -> list[float]:
+    magnitude = math.sqrt(sum(x * x for x in vector))
+    if magnitude > 0:
+        return [x / magnitude for x in vector]
+    return vector
+
+
 def get_embedding(text: str, task_type: str = "RETRIEVAL_QUERY"):
     result = client.models.embed_content(
         model=MODEL_NAME,
@@ -20,7 +28,7 @@ def get_embedding(text: str, task_type: str = "RETRIEVAL_QUERY"):
             task_type=task_type
         )
     )
-    return result.embeddings[0].values
+    return normalize_vector(result.embeddings[0].values)
 
 
 def get_embeddings_batch(
@@ -39,7 +47,7 @@ def get_embeddings_batch(
             title=title
         )
     )
-    return [e.values for e in result.embeddings]
+    return [normalize_vector(e.values) for e in result.embeddings]
 
 
 async def get_embedding_async(text: str, task_type: str = "RETRIEVAL_QUERY"):
@@ -50,7 +58,7 @@ async def get_embedding_async(text: str, task_type: str = "RETRIEVAL_QUERY"):
             task_type=task_type
         )
     )
-    return result.embeddings[0].values
+    return normalize_vector(result.embeddings[0].values)
 
 
 async def get_embeddings_batch_async(
@@ -67,5 +75,6 @@ async def get_embeddings_batch_async(
             title=title
         )
     )
-    return [e.values for e in result.embeddings]
+    return [normalize_vector(e.values) for e in result.embeddings]
+
 
