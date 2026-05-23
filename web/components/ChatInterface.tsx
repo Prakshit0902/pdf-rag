@@ -60,6 +60,7 @@ export default function ChatInterface() {
   }, [messages]);
 
   const hasLoadedInitialRef = useRef(false);
+  const isSendingRef = useRef(false);
 
   // Fetch all sessions for the authenticated user
   const fetchSessions = useCallback(async () => {
@@ -115,6 +116,8 @@ export default function ChatInterface() {
 
   // Load messages whenever active session changes
   useEffect(() => {
+    if (isSendingRef.current) return;
+
     if (isLoaded && userId && currentSessionId) {
       const fetchMessages = async () => {
         setIsLoadingMessages(true);
@@ -185,6 +188,7 @@ export default function ChatInterface() {
     }
     setIsLoading(true);
     setIsStreaming(false);
+    isSendingRef.current = true;
 
     try {
       const token = await getToken();
@@ -256,6 +260,7 @@ export default function ChatInterface() {
     } finally {
       setIsLoading(false);
       setIsStreaming(false);
+      isSendingRef.current = false;
       // Refresh sessions to pull updated title (if auto-created)
       fetchSessions();
     }
