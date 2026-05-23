@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
-import FileUpload from "@/components/FileUpload";
 import ChatInterface from "@/components/ChatInterface";
 import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 
@@ -17,13 +16,13 @@ export const metadata: Metadata = {
 
 export default function Home() {
   return (
-    <div className={`${geistSans.variable} min-h-screen bg-zinc-950 text-zinc-100 font-sans flex flex-col selection:bg-indigo-500 selection:text-white`}>
+    <div className={`${geistSans.variable} h-screen w-screen bg-zinc-950 text-zinc-100 font-sans flex flex-col selection:bg-indigo-500 selection:text-white overflow-hidden`}>
       {/* Background radial glow */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-950/30 via-zinc-950 to-zinc-950 pointer-events-none z-0" />
 
       {/* SIGNED OUT: Landing Page */}
       <Show when="signed-out">
-        <div className="flex-1 flex flex-col items-center justify-center p-6 relative z-10">
+        <div className="flex-1 flex flex-col items-center justify-center p-6 relative z-10 overflow-y-auto">
           <div className="max-w-xl w-full text-center space-y-8">
             <div className="space-y-4">
               <span className="px-3 py-1 text-xs font-semibold tracking-wider text-indigo-400 bg-indigo-950/50 border border-indigo-900 rounded-full inline-block">
@@ -69,7 +68,7 @@ export default function Home() {
 
       {/* SIGNED IN: Application Workspace */}
       <Show when="signed-in">
-        <header className="bg-zinc-900/60 backdrop-blur-md border-b border-zinc-800/80 sticky top-0 py-4 px-6 flex items-center justify-between z-50">
+        <header className="bg-zinc-900/60 backdrop-blur-md border-b border-zinc-800/80 py-4 px-6 flex items-center justify-between z-50 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center font-bold text-white shadow-md">
               Ω
@@ -94,28 +93,10 @@ export default function Home() {
           </div>
         </header>
 
-        <main className="flex-1 max-w-6xl w-full mx-auto py-10 px-6 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <div className="lg:col-span-5 space-y-8">
-              <div className="bg-zinc-900/30 border border-zinc-800/60 p-6 rounded-2xl">
-                <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-2">Workspace Isolation</h3>
-                <p className="text-zinc-500 text-xs leading-relaxed">
-                  Your document cache, vector representations, indexes, and chat memories are isolated inside your personal Clerk Tenant ID. Other users cannot search, view, or process your files.
-                </p>
-              </div>
-              <FileUpload />
-            </div>
-            <div className="lg:col-span-7">
-              <ChatInterface />
-            </div>
-          </div>
-        </main>
+        <div className="flex-1 flex overflow-hidden relative z-10">
+          <ChatInterface />
+        </div>
       </Show>
-
-      {/* Tiny footer */}
-      <footer className="py-4 border-t border-zinc-950 text-center text-[11px] text-zinc-600 relative z-10 font-medium">
-        Isolated PDF RAG Workspace &copy; {new Date().getFullYear()} — Built with Clerk & Supabase
-      </footer>
     </div>
   );
 }
