@@ -5,7 +5,8 @@ from app.qa.ask import build_context
 
 def generate_search_queries(
     question: str,
-    context_limit: int = 3
+    context_limit: int = 3,
+    user_id: str = "default_tenant"
 ):
     """
     Two-stage retrieval planning:
@@ -20,7 +21,8 @@ def generate_search_queries(
         question,
         vector_limit=context_limit,
         bm25_limit=context_limit,
-        rerank_top_k=context_limit
+        rerank_top_k=context_limit,
+        user_id=user_id
     )
 
     context = build_context(initial_chunks)

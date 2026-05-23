@@ -1,3 +1,4 @@
+from typing import Optional
 import json
 
 from app.agent.planner import (
@@ -22,7 +23,9 @@ from app.qa.query_rewriter import (
 
 
 def ask_agentic_question(
-    question: str
+    question: str,
+    user_id: str = "default_tenant",
+    session_id: Optional[str] = None
 ):
 
     # -------------------------
@@ -30,7 +33,9 @@ def ask_agentic_question(
     # -------------------------
 
     rewritten_question = rewrite_query(
-        question
+        question,
+        user_id=user_id,
+        session_id=session_id
     )
 
     # -------------------------
@@ -39,7 +44,8 @@ def ask_agentic_question(
     # -------------------------
 
     raw_queries = generate_search_queries(
-        rewritten_question
+        rewritten_question,
+        user_id=user_id
     )
 
     try:
@@ -54,7 +60,8 @@ def ask_agentic_question(
     # -------------------------
 
     chunks = gather_evidence(
-        all_queries
+        all_queries,
+        user_id=user_id
     )
 
     context = build_context(

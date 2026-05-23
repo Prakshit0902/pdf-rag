@@ -1,7 +1,8 @@
+from typing import Optional
 from app.retrieval.retrieve import retrieve_chunks, retrieve_chunks_async
 
 from app.memory.memory import (
-    add_message
+    add_message_async
 )
 
 from app.qa.query_rewriter import (
@@ -17,14 +18,17 @@ from app.llm.gemini import (
 from app.qa.ask import build_context
 
 
-async def stream_question(question: str):
+async def stream_question(question: str, user_id: str = "default_tenant", session_id: Optional[str] = None):
 
     rewritten_question = await rewrite_query_async(
-        question
+        question,
+        user_id=user_id,
+        session_id=session_id
     )
 
     chunks = await retrieve_chunks_async(
-        rewritten_question
+        rewritten_question,
+        user_id=user_id
     )
 
     context = build_context(chunks)
@@ -95,12 +99,16 @@ Provide a well-formatted answer in markdown. List sources at the end as:
 
         yield token
 
-    add_message(
+    await add_message_async(
         "user",
-        question
+        question,
+        user_id=user_id,
+        session_id=session_id
     )
 
-    add_message(
+    await add_message_async(
         "assistant",
-        final_answer
+        final_answer,
+        user_id=user_id,
+        session_id=session_id
     )

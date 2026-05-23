@@ -95,7 +95,7 @@ def main():
         pass
 
 
-def index_single_file(json_path: str) -> None:
+def index_single_file(json_path: str, user_id: str = "default_tenant") -> None:
     """Index a single parsed JSON file to vector store."""
     if not os.path.exists(json_path):
         raise FileNotFoundError(f"Parsed JSON file not found for indexing at {json_path}")
@@ -122,14 +122,14 @@ def index_single_file(json_path: str) -> None:
     if embeddings:
         vector_size = len(embeddings[0])
         create_collection(vector_size)
-        store_chunks(chunks, embeddings)
+        store_chunks(chunks, embeddings, user_id=user_id)
 
     print(f"Indexed {len(chunks)} chunks")
 
     # Reload BM25 index to make newly indexed file chunks searchable immediately
     try:
         from app.retrieval.bm25_index import reload_index
-        reload_index()
+        reload_index(user_id=user_id)
     except Exception as e:
         print(f"Failed to reload BM25 index: {e}")
 

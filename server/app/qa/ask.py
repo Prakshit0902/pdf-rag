@@ -1,3 +1,4 @@
+from typing import Optional
 from app.retrieval.retrieve import retrieve_chunks
 from app.llm.gemini import generate_answer
 from app.memory.memory import (add_message)
@@ -43,11 +44,13 @@ def build_context(chunks):
     )
 
 
-def ask_question(question: str):
+def ask_question(question: str, user_id: str = "default_tenant", session_id: Optional[str] = None):
     rewritten_question = rewrite_query(
-        question
+        question,
+        user_id=user_id,
+        session_id=session_id
     )
-    chunks = retrieve_chunks(rewritten_question)
+    chunks = retrieve_chunks(rewritten_question, user_id=user_id)
 
     context = build_context(chunks)
 
@@ -104,12 +107,16 @@ def ask_question(question: str):
     
     add_message(
         "user",
-        question
+        question,
+        user_id=user_id,
+        session_id=session_id
     )
 
     add_message(
         "assistant",
-        answer
+        answer,
+        user_id=user_id,
+        session_id=session_id
     )
     
     evaluation = evaluate_answer(question, answer, chunks)
