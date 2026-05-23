@@ -24,3 +24,161 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Custom Markdown Rendering Styles for better and cleaner UI */
+.markdown-content {
+  color: #d4d4d8; /* Zinc 300 */
+}
+
+.markdown-content p {
+  margin-bottom: 0.75rem;
+  line-height: 1.625;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+  color: #ffffff;
+  font-weight: 700;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.25;
+}
+
+.markdown-content h1 { font-size: 1.25rem; }
+.markdown-content h2 { font-size: 1.1rem; }
+.markdown-content h3 { font-size: 1rem; }
+.markdown-content h4 { font-size: 0.875rem; }
+
+.markdown-content strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.markdown-content em {
+  font-style: italic;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin-bottom: 0.75rem;
+  padding-left: 1.25rem;
+}
+
+.markdown-content ul {
+  list-style-type: disc;
+}
+
+.markdown-content ol {
+  list-style-type: decimal;
+}
+
+.markdown-content li {
+  margin-bottom: 0.25rem;
+  line-height: 1.5;
+}
+
+.markdown-content code {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.85em;
+  background-color: #27272a; /* Zinc 800 */
+  color: #c7d2fe; /* Indigo 200 */
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.markdown-content pre {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 1rem;
+  background-color: #09090b; /* Zinc 950 */
+  border: 1px solid #27272a; /* Zinc 800 */
+  border-radius: 0.75rem;
+  overflow-x: auto;
+}
+
+.markdown-content pre code {
+  background-color: transparent;
+  color: #e4e4e7; /* Zinc 200 */
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.8rem;
+  border: none;
+}
+
+.markdown-content blockquote {
+  border-left: 4px solid #6366f1; /* Indigo 500 */
+  padding-left: 1rem;
+  font-style: italic;
+  color: #a1a1aa; /* Zinc 400 */
+  margin: 1rem 0;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.8rem;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid #27272a; /* Zinc 800 */
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.markdown-content th {
+  background-color: #18181b; /* Zinc 900 */
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.markdown-content tr:nth-child(even) {
+  background-color: rgba(39, 39, 42, 0.25); /* Zinc 800 with transparency */
+}
+
+.markdown-content a {
+  color: #818cf8; /* Indigo 400 */
+  text-decoration: underline;
+}
+
+.markdown-content a:hover {
+  color: #a5b4fc; /* Indigo 300 */
+}
+
+/* Blinking Cursor for Real-time Streaming Response */
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.is-streaming > *:last-child::after,
+.is-streaming > ul:last-child > li:last-child::after,
+.is-streaming > ol:last-child > li:last-child::after,
+.is-streaming > pre:last-child > code::after,
+.is-streaming > table:last-child tr:last-child td:last-child::after,
+.is-streaming > blockquote:last-child > p:last-child::after {
+  content: "▋";
+  display: inline-block;
+  color: #6366f1; /* Indigo 500 */
+  animation: blink-cursor 0.8s step-end infinite;
+  margin-left: 0.25rem;
+  vertical-align: middle;
+}
+
+/* Avoid duplicate cursor if both parent container and its child match */
+.is-streaming > ul:last-child::after,
+.is-streaming > ol:last-child::after,
+.is-streaming > pre:last-child::after,
+.is-streaming > table:last-child::after,
+.is-streaming > blockquote:last-child::after {
+  content: none !important;
+}
+
