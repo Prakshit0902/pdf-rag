@@ -12,14 +12,16 @@ document_cache = {}
 
 
 def load_document(
-    source_file
+    source_file,
+    user_id: str = "default_tenant"
 ):
-
-    if source_file in document_cache:
-        return document_cache[source_file]
+    cache_key = (user_id, source_file)
+    if cache_key in document_cache:
+        return document_cache[cache_key]
 
     path = os.path.join(
         PARSED_DIR,
+        user_id,
         source_file.replace(".pdf", ".json")
     )
 
@@ -30,7 +32,7 @@ def load_document(
     try:
         with open(path, "r", encoding="utf-8") as f:
             chunks = json.load(f)
-        document_cache[source_file] = chunks
+        document_cache[cache_key] = chunks
         return chunks
     except Exception as e:
         print(f"Error loading parsed document {path}: {e}")
@@ -39,7 +41,8 @@ def load_document(
 
 def expand_parent_context(
     retrieved_chunks,
-    window_size: int = 1
+    window_size: int = 1,
+    user_id: str = "default_tenant"
 ):
 
     expanded_chunks = []
@@ -70,7 +73,8 @@ def expand_parent_context(
             scores_to_preserve["rerank_score"] = chunk.get("rerank_score", 0)
 
         all_chunks = load_document(
-            source_file
+            source_file,
+            user_id=user_id
         )
 
         start = max(

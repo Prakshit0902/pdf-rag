@@ -1,7 +1,8 @@
 from qdrant_client.models import (
     Distance,
     VectorParams,
-    PointStruct
+    PointStruct,
+    PayloadSchemaType
 )
 
 from app.vectorstore.qdrant_client import client
@@ -35,6 +36,10 @@ def create_collection(vector_size: int):
                 current_size = vectors_config["size"]
             
             if current_distance == Distance.DOT and current_size == vector_size:
+                try:
+                    client.create_payload_index(COLLECTION_NAME, "user_id", PayloadSchemaType.KEYWORD)
+                except Exception as e:
+                    pass
                 return
                 
             print(f"Collection '{COLLECTION_NAME}' exists but has config mismatch (distance={current_distance}, size={current_size}). Recreating...")
@@ -55,22 +60,30 @@ def create_collection(vector_size: int):
         )
     )
 
+    try:
+        client.create_payload_index(COLLECTION_NAME, "user_id", PayloadSchemaType.KEYWORD)
+    except Exception as e:
+        print(f"Error creating payload index: {e}")
+
     print(f"Qdrant collection '{COLLECTION_NAME}' created with Distance.DOT")
 
 
 
-def store_chunks(chunks, embeddings):
+def store_chunks(chunks, embeddings, user_id="default_tenant"):
 
     points = []
 
     for chunk, embedding in zip(chunks, embeddings):
+
+        payload = dict(chunk)
+        payload["user_id"] = user_id
 
         point = PointStruct(
             id=chunk["id"],
 
             vector=embedding,
 
-            payload=chunk
+            payload=payload
         )
 
         points.append(point)
@@ -80,4 +93,4 @@ def store_chunks(chunks, embeddings):
         points=points
     )
 
-    print(f"Stored {len(points)} chunks")
+    print(f"Stored {len(points)} chunks with user_id: {user_id}")

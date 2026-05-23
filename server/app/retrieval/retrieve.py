@@ -14,16 +14,23 @@ COLLECTION_NAME = "pdf_rag"
 
 def vector_search(
     query: str,
-    limit: int = 10
+    limit: int = 10,
+    user_id: str = "default_tenant"
 ):
 
     query_embedding = get_embedding(query, task_type="RETRIEVAL_QUERY")
 
+    from qdrant_client.models import Filter, FieldCondition, MatchValue
+    query_filter = Filter(
+        must=[
+            FieldCondition(key="user_id", match=MatchValue(value=user_id))
+        ]
+    )
+
     results = client.query_points(
         collection_name=COLLECTION_NAME,
-
         query=query_embedding,
-
+        query_filter=query_filter,
         limit=limit,
     )
 
@@ -73,16 +80,19 @@ def retrieve_chunks(
     query: str,
     vector_limit: int = 10,
     bm25_limit: int = 10,
-    rerank_top_k: int = 5
+    rerank_top_k: int = 5,
+    user_id: str = "default_tenant"
 ):
 
     vector_chunks = vector_search(
         query,
-        limit=vector_limit
+        limit=vector_limit,
+        user_id=user_id
     )
 
     bm25_chunks = bm25_search(
         query,
+        user_id=user_id,
         top_k=bm25_limit
     )
 
@@ -99,7 +109,8 @@ def retrieve_chunks(
 
     expanded_chunks = expand_parent_context(
         reranked_chunks,
-        window_size=1
+        window_size=1,
+        user_id=user_id
     )
     
     return expanded_chunks
@@ -107,15 +118,24 @@ def retrieve_chunks(
 
 async def vector_search_async(
     query: str,
-    limit: int = 10
+    limit: int = 10,
+    user_id: str = "default_tenant"
 ):
     query_embedding = await get_embedding_async(query, task_type="RETRIEVAL_QUERY")
+
+    from qdrant_client.models import Filter, FieldCondition, MatchValue
+    query_filter = Filter(
+        must=[
+            FieldCondition(key="user_id", match=MatchValue(value=user_id))
+        ]
+    )
 
     results = await anyio.to_thread.run_sync(
         partial(
             client.query_points,
             collection_name=COLLECTION_NAME,
             query=query_embedding,
+            query_filter=query_filter,
             limit=limit
         )
     )
@@ -134,12 +154,13 @@ async def retrieve_chunks_async(
     query: str,
     vector_limit: int = 10,
     bm25_limit: int = 10,
-    rerank_top_k: int = 5
+    rerank_top_k: int = 5,
+    user_id: str = "default_tenant"
 ):
     import asyncio
-    vector_task = vector_search_async(query, limit=vector_limit)
+    vector_task = vector_search_async(query, limit=vector_limit, user_id=user_id)
     bm25_task = anyio.to_thread.run_sync(
-        partial(bm25_search, query, top_k=bm25_limit)
+        partial(bm25_search, query, user_id=user_id, top_k=bm25_limit)
     )
 
     vector_chunks, bm25_chunks = await asyncio.gather(vector_task, bm25_task)
@@ -156,7 +177,7 @@ async def retrieve_chunks_async(
     )
 
     expanded_chunks = await anyio.to_thread.run_sync(
-        partial(expand_parent_context, reranked_chunks, window_size=1)
+        partial(expand_parent_context, reranked_chunks, window_size=1, user_id=user_id)
     )
 
     return expanded_chunks

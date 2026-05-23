@@ -10,32 +10,33 @@ PARSED_DIR = os.path.join(BASE_DIR, "data", "parsed")
 
 os.makedirs(PARSED_DIR, exist_ok=True)
 
-# Lock to synchronize swaps and captures of global variables
+# Lock to synchronize swaps and captures of user indexes
 _lock = threading.Lock()
 
-all_chunks = []
-tokenized_chunks = []
+# Dictionary to hold user-specific indexes: {user_id: (BM25Okapi, all_chunks)}
+_user_indexes = {}
 
 
-def _load_chunks_internal():
-    """Internal helper to load all chunks from disk without modifying globals."""
-    if not os.path.isdir(PARSED_DIR):
+def _load_chunks_internal_user(user_id: str):
+    """Internal helper to load user-specific chunks from disk."""
+    user_parsed_dir = os.path.join(BASE_DIR, "data", "parsed", user_id)
+    if not os.path.isdir(user_parsed_dir):
         return [], []
 
     new_chunks = []
     json_files = [
-        f for f in os.listdir(PARSED_DIR)
+        f for f in os.listdir(user_parsed_dir)
         if f.endswith(".json")
     ]
 
     for file in json_files:
-        path = os.path.join(PARSED_DIR, file)
+        path = os.path.join(user_parsed_dir, file)
         try:
             with open(path, "r", encoding="utf-8") as f:
                 chunks = json.load(f)
                 new_chunks.extend(chunks)
         except Exception as e:
-            print(f"Error loading parsed file {path}: {e}")
+            print(f"Error loading parsed file {path} for user {user_id}: {e}")
 
     new_tokenized_chunks = [
         chunk["text"].lower().split()
@@ -44,45 +45,35 @@ def _load_chunks_internal():
     return new_chunks, new_tokenized_chunks
 
 
-def load_chunks():
-    """Legacy helper function to populate globals. Kept for backwards compatibility."""
-    global all_chunks
-    global tokenized_chunks
-    all_chunks, tokenized_chunks = _load_chunks_internal()
-
-
-# Initial load at module import time
-all_chunks, tokenized_chunks = _load_chunks_internal()
-bm25 = BM25Okapi(tokenized_chunks) if tokenized_chunks else None
-
-
-def reload_index():
-    """Reload all chunks from parsed JSON files and rebuild BM25 index thread-safely."""
-    global all_chunks
-    global tokenized_chunks
-    global bm25
-
-    # Run slow IO and tokenization outside the lock
-    new_chunks, new_tokenized_chunks = _load_chunks_internal()
+def reload_index(user_id: str = "default_tenant"):
+    """Reload all chunks from parsed JSON files and rebuild BM25 index for user thread-safely."""
+    new_chunks, new_tokenized_chunks = _load_chunks_internal_user(user_id)
     new_bm25 = BM25Okapi(new_tokenized_chunks) if new_tokenized_chunks else None
 
     # Swap references atomically under lock
     with _lock:
-        all_chunks = new_chunks
-        tokenized_chunks = new_tokenized_chunks
-        bm25 = new_bm25
+        _user_indexes[user_id] = (new_bm25, new_chunks)
 
-    print(f"BM25 index reloaded thread-safely with {len(all_chunks)} chunks.")
+    print(f"BM25 index reloaded thread-safely for user '{user_id}' with {len(new_chunks)} chunks.")
 
 
 def bm25_search(
     query: str,
+    user_id: str = "default_tenant",
     top_k: int = 5
 ):
-    # Retrieve current global references atomically under lock
+    # Check if index needs to be lazy-loaded
+    needs_reload = False
     with _lock:
-        current_bm25 = bm25
-        current_chunks = all_chunks
+        if user_id not in _user_indexes:
+            needs_reload = True
+
+    if needs_reload:
+        reload_index(user_id)
+
+    # Retrieve current user references atomically under lock
+    with _lock:
+        current_bm25, current_chunks = _user_indexes.get(user_id, (None, []))
 
     if not current_bm25:
         return []
