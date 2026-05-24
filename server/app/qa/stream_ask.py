@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from app.retrieval.retrieve import retrieve_chunks, retrieve_chunks_async
 
 from app.memory.memory import (
@@ -18,7 +18,12 @@ from app.llm.gemini import (
 from app.qa.ask import build_context
 
 
-async def stream_question(question: str, user_id: str = "default_tenant", session_id: Optional[str] = None):
+async def stream_question(
+    question: str,
+    user_id: str = "default_tenant",
+    session_id: Optional[str] = None,
+    selected_files: Optional[List[str]] = None
+):
 
     rewritten_question = await rewrite_query_async(
         question,
@@ -28,7 +33,8 @@ async def stream_question(question: str, user_id: str = "default_tenant", sessio
 
     chunks = await retrieve_chunks_async(
         rewritten_question,
-        user_id=user_id
+        user_id=user_id,
+        selected_files=selected_files
     )
 
     context = build_context(chunks)

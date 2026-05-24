@@ -77,3 +77,15 @@ def is_cached(file_hash: str, user_id: str = "default_tenant") -> bool:
     if os.path.exists(parsed_path) and (not pdf_path or os.path.exists(pdf_path)):
         return True
     return False
+
+
+def delete_cache_by_filename(filename: str, user_id: str = "default_tenant"):
+    manifest = _load_manifest(user_id)
+    keys_to_delete = [
+        k for k, v in manifest.items()
+        if v.get("filename") == filename
+    ]
+    for k in keys_to_delete:
+        del manifest[k]
+    if keys_to_delete:
+        _save_manifest(manifest, user_id)

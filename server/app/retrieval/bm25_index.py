@@ -1,3 +1,4 @@
+from typing import Optional, List
 import os
 import json
 import threading
@@ -60,7 +61,8 @@ def reload_index(user_id: str = "default_tenant"):
 def bm25_search(
     query: str,
     user_id: str = "default_tenant",
-    top_k: int = 5
+    top_k: int = 5,
+    selected_files: Optional[List[str]] = None
 ):
     # Check if index needs to be lazy-loaded
     needs_reload = False
@@ -88,6 +90,13 @@ def bm25_search(
     scored_results = list(
         zip(current_chunks, scores)
     )
+
+    if selected_files:
+        selected_files_set = set(selected_files)
+        scored_results = [
+            (chunk, score) for chunk, score in scored_results
+            if chunk.get("source_file") in selected_files_set
+        ]
 
     scored_results.sort(
         key=lambda x: x[1],

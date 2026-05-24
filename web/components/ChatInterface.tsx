@@ -13,6 +13,7 @@ interface Message {
 interface ChatSession {
   id: string;
   title: string;
+  filename: string | null;
   created_at: string;
 }
 
@@ -41,6 +42,8 @@ export default function ChatInterface() {
 
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -58,6 +61,21 @@ export default function ChatInterface() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Automatically close active session if its related file was deleted
+  useEffect(() => {
+    if (currentSessionId && sessions.length > 0 && uploadedFiles.length > 0) {
+      const activeSession = sessions.find((s) => s.id === currentSessionId);
+      if (
+        activeSession &&
+        activeSession.filename &&
+        !uploadedFiles.includes(activeSession.filename)
+      ) {
+        setCurrentSessionId(null);
+        setMessages([]);
+      }
+    }
+  }, [sessions, uploadedFiles, currentSessionId]);
 
   const hasLoadedInitialRef = useRef(false);
   const isSendingRef = useRef(false);
@@ -148,7 +166,7 @@ export default function ChatInterface() {
   }, [currentSessionId, isLoaded, userId, getToken]);
 
   // Create a new session manually
-  const handleCreateSession = async (title: string = "New Conversation") => {
+  const handleCreateSession = async (title: string = "New Conversation", filename: string | null = null) => {
     if (isCreatingSession || !userId) return null;
     setIsCreatingSession(true);
     try {
@@ -162,7 +180,7 @@ export default function ChatInterface() {
       const response = await fetch(`${API_BASE}/chat/sessions`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title, filename }),
       });
       if (response.ok) {
         const data = await response.json();
@@ -196,7 +214,8 @@ export default function ChatInterface() {
       // Auto-create session if none active
       if (!sessionId) {
         const title = questionToSend.slice(0, 30) + (questionToSend.length > 30 ? "..." : "");
-        const newSession = await handleCreateSession(title);
+        const primaryFile = selectedFiles.length > 0 ? selectedFiles[0] : null;
+        const newSession = await handleCreateSession(title, primaryFile);
         if (!newSession) {
           throw new Error("Failed to create chat session");
         }
@@ -220,6 +239,7 @@ export default function ChatInterface() {
         body: JSON.stringify({
           question: questionToSend,
           session_id: sessionId,
+          selected_files: selectedFiles,
         }),
       });
 
@@ -293,7 +313,13 @@ export default function ChatInterface() {
       <div className="w-full md:w-80 bg-zinc-950/50 border-b md:border-b-0 md:border-r border-zinc-900 flex flex-col flex-shrink-0 h-80 md:h-full">
         {/* Upload box & indexed files */}
         <div className="p-4 border-b border-zinc-900 flex-shrink-0">
-          <FileUpload mode="sidebar" />
+          <FileUpload
+            mode="sidebar"
+            uploadedFiles={uploadedFiles}
+            setUploadedFiles={setUploadedFiles}
+            selectedFiles={selectedFiles}
+            setSelectedFiles={setSelectedFiles}
+          />
         </div>
 
         {/* Conversation Sessions List */}
@@ -301,7 +327,7 @@ export default function ChatInterface() {
           <div className="p-4 flex items-center justify-between flex-shrink-0">
             <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Conversations</span>
             <button
-              onClick={() => handleCreateSession()}
+              onClick={() => handleCreateSession("New Conversation", selectedFiles.length > 0 ? selectedFiles[0] : null)}
               disabled={isCreatingSession}
               className="w-6 h-6 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center border border-zinc-800/80 transition-all cursor-pointer"
               title="New Chat"

@@ -308,3 +308,72 @@ async def list_uploaded_files(user_id: str = "default_tenant") -> JSONResponse:
         if f.endswith(".pdf")
     ]
     return JSONResponse(content={"files": files})
+
+
+async def delete_uploaded_file(filename: str, user_id: str) -> JSONResponse:
+    """Delete an uploaded PDF and all its artifacts/DB connections cleanly."""
+    import shutil
+    from app.vectorstore.supabase_client import delete_document, delete_chat_sessions_by_file
+    from app.vectorstore.qdrant_client import client as qdrant_client
+    from qdrant_client.models import Filter, FieldCondition, MatchValue
+    from app.retrieval.bm25_index import reload_index
+    from app.ingestion.cache import delete_cache_by_filename
+
+    # 1. Disk cleanup
+    user_input_path = os.path.join(BASE_DIR, "data", "cleaned_pdfs", user_id, filename)
+    user_parsed_path = os.path.join(BASE_DIR, "data", "parsed", user_id, filename.replace(".pdf", ".json"))
+    user_image_path = os.path.join(BASE_DIR, "data", "images", user_id, filename.replace(".pdf", ""))
+    user_page_render_path = os.path.join(BASE_DIR, "data", "page_renders", user_id, filename.replace(".pdf", ""))
+
+    try:
+        if os.path.exists(user_input_path):
+            os.remove(user_input_path)
+        if os.path.exists(user_parsed_path):
+            os.remove(user_parsed_path)
+        if os.path.exists(user_image_path):
+            shutil.rmtree(user_image_path, ignore_errors=True)
+        if os.path.exists(user_page_render_path):
+            shutil.rmtree(user_page_render_path, ignore_errors=True)
+    except Exception as disk_err:
+        print(f"Disk cleanup error during file deletion: {disk_err}")
+
+    # 2. Qdrant cleanup
+    try:
+        qdrant_client.delete(
+            collection_name="pdf_rag",
+            points_selector=Filter(
+                must=[
+                    FieldCondition(key="user_id", match=MatchValue(value=user_id)),
+                    FieldCondition(key="source_file", match=MatchValue(value=filename))
+                ]
+            )
+        )
+    except Exception as qdrant_err:
+        print(f"Qdrant cleanup error during file deletion: {qdrant_err}")
+
+    # 3. Reload BM25 index
+    try:
+        reload_index(user_id)
+    except Exception as bm25_err:
+        print(f"BM25 reload error during file deletion: {bm25_err}")
+
+    # 4. Cache eviction
+    try:
+        delete_cache_by_filename(filename, user_id=user_id)
+    except Exception as cache_err:
+        print(f"Cache eviction error during file deletion: {cache_err}")
+
+    # 5. Database cleanup
+    try:
+        await delete_document(user_id, filename)
+        await delete_chat_sessions_by_file(user_id, filename)
+    except Exception as db_err:
+        print(f"Database cleanup error during file deletion: {db_err}")
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "message": f"Successfully deleted document '{filename}' and all related resources."
+        }
+    )

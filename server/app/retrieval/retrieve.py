@@ -1,3 +1,4 @@
+from typing import Optional, List
 from functools import partial
 import anyio
 from app.embeddings.embedder import get_embedding, get_embedding_async
@@ -15,17 +16,21 @@ COLLECTION_NAME = "pdf_rag"
 def vector_search(
     query: str,
     limit: int = 10,
-    user_id: str = "default_tenant"
+    user_id: str = "default_tenant",
+    selected_files: Optional[List[str]] = None
 ):
 
     query_embedding = get_embedding(query, task_type="RETRIEVAL_QUERY")
 
-    from qdrant_client.models import Filter, FieldCondition, MatchValue
-    query_filter = Filter(
-        must=[
-            FieldCondition(key="user_id", match=MatchValue(value=user_id))
-        ]
-    )
+    from qdrant_client.models import Filter, FieldCondition, MatchValue, MatchAny
+    must_conditions = [
+        FieldCondition(key="user_id", match=MatchValue(value=user_id))
+    ]
+    if selected_files:
+        must_conditions.append(
+            FieldCondition(key="source_file", match=MatchAny(any=selected_files))
+        )
+    query_filter = Filter(must=must_conditions)
 
     results = client.query_points(
         collection_name=COLLECTION_NAME,
@@ -81,19 +86,22 @@ def retrieve_chunks(
     vector_limit: int = 10,
     bm25_limit: int = 10,
     rerank_top_k: int = 5,
-    user_id: str = "default_tenant"
+    user_id: str = "default_tenant",
+    selected_files: Optional[List[str]] = None
 ):
 
     vector_chunks = vector_search(
         query,
         limit=vector_limit,
-        user_id=user_id
+        user_id=user_id,
+        selected_files=selected_files
     )
 
     bm25_chunks = bm25_search(
         query,
         user_id=user_id,
-        top_k=bm25_limit
+        top_k=bm25_limit,
+        selected_files=selected_files
     )
 
     merged_chunks = merge_results(
@@ -119,16 +127,20 @@ def retrieve_chunks(
 async def vector_search_async(
     query: str,
     limit: int = 10,
-    user_id: str = "default_tenant"
+    user_id: str = "default_tenant",
+    selected_files: Optional[List[str]] = None
 ):
     query_embedding = await get_embedding_async(query, task_type="RETRIEVAL_QUERY")
 
-    from qdrant_client.models import Filter, FieldCondition, MatchValue
-    query_filter = Filter(
-        must=[
-            FieldCondition(key="user_id", match=MatchValue(value=user_id))
-        ]
-    )
+    from qdrant_client.models import Filter, FieldCondition, MatchValue, MatchAny
+    must_conditions = [
+        FieldCondition(key="user_id", match=MatchValue(value=user_id))
+    ]
+    if selected_files:
+        must_conditions.append(
+            FieldCondition(key="source_file", match=MatchAny(any=selected_files))
+        )
+    query_filter = Filter(must=must_conditions)
 
     results = await anyio.to_thread.run_sync(
         partial(
@@ -155,12 +167,13 @@ async def retrieve_chunks_async(
     vector_limit: int = 10,
     bm25_limit: int = 10,
     rerank_top_k: int = 5,
-    user_id: str = "default_tenant"
+    user_id: str = "default_tenant",
+    selected_files: Optional[List[str]] = None
 ):
     import asyncio
-    vector_task = vector_search_async(query, limit=vector_limit, user_id=user_id)
+    vector_task = vector_search_async(query, limit=vector_limit, user_id=user_id, selected_files=selected_files)
     bm25_task = anyio.to_thread.run_sync(
-        partial(bm25_search, query, user_id=user_id, top_k=bm25_limit)
+        partial(bm25_search, query, user_id=user_id, top_k=bm25_limit, selected_files=selected_files)
     )
 
     vector_chunks, bm25_chunks = await asyncio.gather(vector_task, bm25_task)

@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 import time
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import FastAPI, UploadFile, BackgroundTasks, Depends
 from fastapi.responses import StreamingResponse
@@ -21,7 +21,8 @@ from app.api.upload import (
     upload_pdf,
     get_job_status,
     get_all_jobs,
-    list_uploaded_files
+    list_uploaded_files,
+    delete_uploaded_file
 )
 
 
@@ -69,12 +70,18 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     question: str
     session_id: Optional[str] = None
+    selected_files: Optional[List[str]] = None
 
 
 @app.post("/chat")
 async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     async def event_generator():
-        async for token in stream_question(request.question, user_id=user_id, session_id=request.session_id):
+        async for token in stream_question(
+            request.question,
+            user_id=user_id,
+            session_id=request.session_id,
+            selected_files=request.selected_files
+        ):
             yield token
 
     return StreamingResponse(
@@ -91,12 +98,19 @@ async def get_sessions(user_id: str = Depends(get_current_user)):
 
 class CreateSessionRequest(BaseModel):
     title: str
+    filename: Optional[str] = None
 
 
 @app.post("/chat/sessions")
 async def create_session(request: CreateSessionRequest, user_id: str = Depends(get_current_user)):
     """Create a new chat session for the authenticated user."""
-    return await create_chat_session(user_id, request.title)
+    return await create_chat_session(user_id, request.title, request.filename)
+
+
+@app.delete("/upload/files/{filename}")
+async def delete_file(filename: str, user_id: str = Depends(get_current_user)):
+    """Delete an uploaded PDF file and all its dependencies from the workspace."""
+    return await delete_uploaded_file(filename, user_id)
 
 
 @app.get("/chat/sessions/{session_id}/messages")

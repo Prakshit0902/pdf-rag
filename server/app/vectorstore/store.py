@@ -40,6 +40,10 @@ def create_collection(vector_size: int):
                     client.create_payload_index(COLLECTION_NAME, "user_id", PayloadSchemaType.KEYWORD)
                 except Exception as e:
                     pass
+                try:
+                    client.create_payload_index(COLLECTION_NAME, "source_file", PayloadSchemaType.KEYWORD)
+                except Exception as e:
+                    pass
                 return
                 
             print(f"Collection '{COLLECTION_NAME}' exists but has config mismatch (distance={current_distance}, size={current_size}). Recreating...")
@@ -63,7 +67,12 @@ def create_collection(vector_size: int):
     try:
         client.create_payload_index(COLLECTION_NAME, "user_id", PayloadSchemaType.KEYWORD)
     except Exception as e:
-        print(f"Error creating payload index: {e}")
+        print(f"Error creating user_id payload index: {e}")
+
+    try:
+        client.create_payload_index(COLLECTION_NAME, "source_file", PayloadSchemaType.KEYWORD)
+    except Exception as e:
+        print(f"Error creating source_file payload index: {e}")
 
     print(f"Qdrant collection '{COLLECTION_NAME}' created with Distance.DOT")
 

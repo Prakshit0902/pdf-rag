@@ -46,12 +46,13 @@ def _list_documents_local(user_id: str) -> List[dict]:
     with _local_db_lock:
         return [doc for doc in _local_documents if doc["user_id"] == user_id]
 
-def _create_chat_session_local(user_id: str, title: str) -> dict:
+def _create_chat_session_local(user_id: str, title: str, filename: Optional[str] = None) -> dict:
     with _local_db_lock:
         session = {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
             "title": title,
+            "filename": filename,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         _local_sessions.append(session)
@@ -169,9 +170,9 @@ async def list_documents(user_id: str) -> List[dict]:
         _handle_supabase_error(e, "listing documents")
         return _list_documents_local(user_id)
 
-async def create_chat_session(user_id: str, title: str) -> Optional[dict]:
+async def create_chat_session(user_id: str, title: str, filename: Optional[str] = None) -> Optional[dict]:
     if not is_supabase_configured():
-        return _create_chat_session_local(user_id, title)
+        return _create_chat_session_local(user_id, title, filename)
     try:
         headers = await _get_client_headers()
         async with httpx.AsyncClient() as client:
@@ -180,7 +181,8 @@ async def create_chat_session(user_id: str, title: str) -> Optional[dict]:
                 headers=headers,
                 json={
                     "user_id": user_id,
-                    "title": title
+                    "title": title,
+                    "filename": filename
                 }
             )
             resp.raise_for_status()
@@ -188,7 +190,7 @@ async def create_chat_session(user_id: str, title: str) -> Optional[dict]:
             return data[0] if isinstance(data, list) and data else data
     except Exception as e:
         _handle_supabase_error(e, "creating chat session")
-        return _create_chat_session_local(user_id, title)
+        return _create_chat_session_local(user_id, title, filename)
 
 async def list_chat_sessions(user_id: str) -> List[dict]:
     if not is_supabase_configured():
@@ -250,4 +252,91 @@ async def list_chat_messages(session_id: str, user_id: str) -> List[dict]:
     except Exception as e:
         _handle_supabase_error(e, "listing messages")
         return _list_chat_messages_local(session_id, user_id)
+
+
+def _delete_document_local(user_id: str, filename: str) -> None:
+    global _local_documents
+    with _local_db_lock:
+        _local_documents = [
+            d for d in _local_documents
+            if not (d["user_id"] == user_id and d["filename"] == filename)
+        ]
+
+
+def _delete_chat_sessions_by_file_local(user_id: str, filename: str) -> None:
+    global _local_sessions, _local_messages
+    with _local_db_lock:
+        session_ids = [
+            s["id"] for s in _local_sessions
+            if s["user_id"] == user_id and s.get("filename") == filename
+        ]
+        if session_ids:
+            _local_sessions = [
+                s for s in _local_sessions
+                if s["id"] not in session_ids
+            ]
+            _local_messages = [
+                m for m in _local_messages
+                if m["session_id"] not in session_ids
+            ]
+
+
+async def delete_document(user_id: str, filename: str) -> bool:
+    if not is_supabase_configured():
+        _delete_document_local(user_id, filename)
+        return True
+    try:
+        headers = {
+            "apikey": SUPABASE_KEY or "",
+            "Authorization": f"Bearer {SUPABASE_KEY or ''}"
+        }
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(
+                f"{SUPABASE_URL}/rest/v1/user_documents?user_id=eq.{user_id}&filename=eq.{filename}",
+                headers=headers
+            )
+            resp.raise_for_status()
+            return True
+    except Exception as e:
+        _handle_supabase_error(e, "deleting document")
+        _delete_document_local(user_id, filename)
+        return True
+
+
+async def delete_chat_sessions_by_file(user_id: str, filename: str) -> bool:
+    if not is_supabase_configured():
+        _delete_chat_sessions_by_file_local(user_id, filename)
+        return True
+    try:
+        headers = {
+            "apikey": SUPABASE_KEY or "",
+            "Authorization": f"Bearer {SUPABASE_KEY or ''}"
+        }
+        async with httpx.AsyncClient() as client:
+            # 1. Retrieve IDs of sessions to delete
+            resp = await client.get(
+                f"{SUPABASE_URL}/rest/v1/chat_sessions?user_id=eq.{user_id}&filename=eq.{filename}&select=id",
+                headers=headers
+            )
+            resp.raise_for_status()
+            sessions = resp.json()
+            session_ids = [s["id"] for s in sessions]
+            
+            if session_ids:
+                # 2. Delete messages first
+                ids_str = ",".join(session_ids)
+                await client.delete(
+                    f"{SUPABASE_URL}/rest/v1/chat_messages?session_id=in.({ids_str})",
+                    headers=headers
+                )
+                # 3. Delete sessions
+                await client.delete(
+                    f"{SUPABASE_URL}/rest/v1/chat_sessions?user_id=eq.{user_id}&filename=eq.{filename}",
+                    headers=headers
+                )
+            return True
+    except Exception as e:
+        _handle_supabase_error(e, "deleting chat sessions by file")
+        _delete_chat_sessions_by_file_local(user_id, filename)
+        return True
 
