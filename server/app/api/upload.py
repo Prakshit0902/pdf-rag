@@ -200,6 +200,31 @@ def process_pdf_pipeline(filename: str, job_id: str, user_id: str, pdf_hash: Opt
         index_single_file(output_path, user_id=user_id)
         print(f"[{job_id}] Indexed chunks to vector store")
 
+        # ── Launch metadata generation in background (non-blocking) ──
+        import threading
+        from app.agent.metadata_generator import generate_and_save_metadata
+
+        def _run_metadata_bg(bg_chunks, bg_filename, bg_user_id, bg_job_id):
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(
+                    generate_and_save_metadata(bg_chunks, bg_filename, bg_user_id)
+                )
+                print(f"[{bg_job_id}] Metadata generation completed")
+            except Exception as meta_err:
+                print(f"[{bg_job_id}] Metadata generation failed: {meta_err}")
+            finally:
+                loop.close()
+
+        meta_thread = threading.Thread(
+            target=_run_metadata_bg,
+            args=(chunks, filename, user_id, job_id),
+            daemon=True,
+        )
+        meta_thread.start()
+
         # Sync metadata to Supabase
         try:
             from app.vectorstore.supabase_client import insert_document_sync
@@ -324,6 +349,7 @@ async def delete_uploaded_file(filename: str, user_id: str) -> JSONResponse:
     user_parsed_path = os.path.join(BASE_DIR, "data", "parsed", user_id, filename.replace(".pdf", ".json"))
     user_image_path = os.path.join(BASE_DIR, "data", "images", user_id, filename.replace(".pdf", ""))
     user_page_render_path = os.path.join(BASE_DIR, "data", "page_renders", user_id, filename.replace(".pdf", ""))
+    user_metadata_path = os.path.join(BASE_DIR, "data", "metadata", user_id, filename.replace(".pdf", ".json"))
 
     try:
         if os.path.exists(user_input_path):
@@ -334,6 +360,8 @@ async def delete_uploaded_file(filename: str, user_id: str) -> JSONResponse:
             shutil.rmtree(user_image_path, ignore_errors=True)
         if os.path.exists(user_page_render_path):
             shutil.rmtree(user_page_render_path, ignore_errors=True)
+        if os.path.exists(user_metadata_path):
+            os.remove(user_metadata_path)
     except Exception as disk_err:
         print(f"Disk cleanup error during file deletion: {disk_err}")
 

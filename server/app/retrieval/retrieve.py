@@ -193,4 +193,91 @@ async def retrieve_chunks_async(
         partial(expand_parent_context, reranked_chunks, window_size=1, user_id=user_id)
     )
 
-    return expanded_chunks
+    return expanded_chunks
+
+
+async def retrieve_per_file_async(
+    query: str,
+    quota_per_file: int = 5,
+    rerank_top_k: int = 7,
+    user_id: str = "default_tenant",
+    selected_files: Optional[List[str]] = None,
+):
+    """
+    Guarantees at least `quota_per_file` chunks from EACH active document
+    before global reranking.  Fixes the multi-PDF sourcing bias where one
+    document consumes all K slots when its chunks happen to score higher.
+
+    For single-file or no-selection cases, delegates to retrieve_chunks_async.
+    """
+    import asyncio
+    from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+    if not selected_files or len(selected_files) <= 1:
+        return await retrieve_chunks_async(
+            query,
+            user_id=user_id,
+            selected_files=selected_files,
+            rerank_top_k=rerank_top_k,
+        )
+
+    # Embed the query once (reused across all per-file searches)
+    query_embedding = await get_embedding_async(query, task_type="RETRIEVAL_QUERY")
+
+    # Issue one vector search per active file concurrently
+    async def _search_one_file(filename: str):
+        results = await anyio.to_thread.run_sync(
+            partial(
+                client.query_points,
+                collection_name=COLLECTION_NAME,
+                query=query_embedding,
+                query_filter=Filter(must=[
+                    FieldCondition(key="user_id", match=MatchValue(value=user_id)),
+                    FieldCondition(key="source_file", match=MatchValue(value=filename)),
+                ]),
+                limit=quota_per_file,
+            )
+        )
+        chunks = []
+        for r in results.points:
+            p = r.payload.copy()
+            p["vector_score"] = r.score
+            p["id"] = str(r.id)
+            chunks.append(p)
+        return chunks
+
+    per_file_results = await asyncio.gather(
+        *[_search_one_file(f) for f in selected_files],
+        return_exceptions=True,
+    )
+
+    vector_chunks = []
+    for result in per_file_results:
+        if isinstance(result, list):
+            vector_chunks.extend(result)
+
+    # BM25 across all active files (already supports selected_files filtering)
+    bm25_chunks = await anyio.to_thread.run_sync(
+        partial(
+            bm25_search,
+            query,
+            user_id=user_id,
+            top_k=quota_per_file * len(selected_files),
+            selected_files=selected_files,
+        )
+    )
+
+    merged_chunks = merge_results(vector_chunks, bm25_chunks)
+
+    reranked_chunks = await rerank_chunks_async(
+        query,
+        merged_chunks,
+        top_k=rerank_top_k,
+    )
+
+    expanded_chunks = await anyio.to_thread.run_sync(
+        partial(expand_parent_context, reranked_chunks, window_size=1, user_id=user_id)
+    )
+
+    return expanded_chunks
+

@@ -1,5 +1,5 @@
 from typing import Optional, List
-from app.retrieval.retrieve import retrieve_chunks, retrieve_chunks_async
+from app.retrieval.retrieve import retrieve_chunks, retrieve_chunks_async, retrieve_per_file_async
 
 from app.memory.memory import (
     add_message_async
@@ -17,6 +17,13 @@ from app.llm.gemini import (
 
 from app.qa.ask import build_context
 
+from app.agent.router import classify_query
+from app.agent.handlers import (
+    handle_document_summary,
+    handle_aggregation,
+    handle_comparison,
+)
+
 
 async def stream_question(
     question: str,
@@ -31,46 +38,77 @@ async def stream_question(
         session_id=session_id
     )
 
-    chunks = await retrieve_chunks_async(
-        rewritten_question,
-        user_id=user_id,
-        selected_files=selected_files
-    )
+    # ── Intent classification ────────────────────────────────────────
+    intent = await classify_query(rewritten_question, selected_files or [])
+    print(f"[router] Query intent: {intent} | Files: {selected_files}")
 
-    context = build_context(chunks)
+    final_answer = ""
 
-    image_paths = []
+    # ── Tier dispatch for non-chunk intents ───────────────────────────
+    if intent == "document_summary":
+        async for token in handle_document_summary(
+            rewritten_question, selected_files or [], user_id
+        ):
+            final_answer += token
+            yield token
 
-    page_renders = []
+    elif intent == "aggregation":
+        async for token in handle_aggregation(
+            rewritten_question, selected_files or [], user_id
+        ):
+            final_answer += token
+            yield token
 
-    for chunk in chunks:
+    elif intent == "comparison":
+        async for token in handle_comparison(
+            rewritten_question, selected_files or [], user_id,
+            selected_files or []
+        ):
+            final_answer += token
+            yield token
 
-        images = chunk.get(
-            "images",
-            []
+    else:
+        # ── CHUNK_RETRIEVAL: existing pipeline with per-file fairness ─
+        chunks = await retrieve_per_file_async(
+            rewritten_question,
+            user_id=user_id,
+            selected_files=selected_files
         )
 
-        image_paths.extend(images)
+        context = build_context(chunks)
 
-        page_render = chunk.get(
-            "page_render"
-        )
+        image_paths = []
 
-        if page_render:
+        page_renders = []
 
-            page_renders.append(
-                page_render
+        for chunk in chunks:
+
+            images = chunk.get(
+                "images",
+                []
             )
 
-    image_paths = list(
-        set(image_paths)
-    )
+            image_paths.extend(images)
 
-    page_renders = list(
-        set(page_renders)
-    )
+            page_render = chunk.get(
+                "page_render"
+            )
 
-    prompt = f"""
+            if page_render:
+
+                page_renders.append(
+                    page_render
+                )
+
+        image_paths = list(
+            set(image_paths)
+        )
+
+        page_renders = list(
+            set(page_renders)
+        )
+
+        prompt = f"""
 You are a helpful AI assistant answering questions from documents.
 
 Answer in clean markdown format. Use:
@@ -94,17 +132,16 @@ Provide a well-formatted answer in markdown. List sources at the end as:
 **Sources:** [file.pdf, page X], [file2.pdf, page Y]
 """
 
-    final_answer = ""
+        async for token in stream_answer_async(
+            prompt,
+            image_paths=image_paths + page_renders
+        ):
 
-    async for token in stream_answer_async(
-        prompt,
-        image_paths=image_paths + page_renders
-    ):
+            final_answer += token
 
-        final_answer += token
+            yield token
 
-        yield token
-
+    # ── Save to chat history (all tiers) ─────────────────────────────
     await add_message_async(
         "user",
         question,
@@ -117,4 +154,4 @@ Provide a well-formatted answer in markdown. List sources at the end as:
         final_answer,
         user_id=user_id,
         session_id=session_id
-    )
+    )
