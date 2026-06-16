@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import MarkdownRenderer from "./MarkdownRenderer";
 import FileUpload from "./FileUpload";
+import PdfViewerPanel, { type Citation } from "./PdfViewerPanel";
 
 interface Message {
   role: "user" | "assistant";
@@ -51,6 +52,7 @@ export default function ChatInterface() {
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -293,6 +295,18 @@ export default function ChatInterface() {
     }
   };
 
+  const handleCitationClick = useCallback(
+    (source: string, page: number, text: string) => {
+      setActiveCitation({ source, page, text });
+    },
+    []
+  );
+
+  /** Open PDF viewer at page 1 when an indexed file is clicked from the sidebar */
+  const handleFileClick = useCallback((filename: string) => {
+    setActiveCitation({ source: filename, page: 1, text: "" });
+  }, []);
+
   const getActiveSessionTitle = () => {
     const active = sessions.find((s) => s.id === currentSessionId);
     return active ? active.title : "New Conversation";
@@ -307,7 +321,15 @@ export default function ChatInterface() {
   ];
 
   return (
-    <div className="w-full h-full flex flex-col md:flex-row overflow-hidden">
+    <div className="w-full h-full flex flex-col md:flex-row overflow-hidden relative">
+
+      {/* Mobile overlay backdrop when PDF viewer is open */}
+      {activeCitation && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+          onClick={() => setActiveCitation(null)}
+        />
+      )}
       
       {/* Sidebar: Files & Conversations */}
       <div className="w-full md:w-80 bg-zinc-950/50 border-b md:border-b-0 md:border-r border-zinc-900 flex flex-col flex-shrink-0 h-80 md:h-full">
@@ -319,6 +341,7 @@ export default function ChatInterface() {
             setUploadedFiles={setUploadedFiles}
             selectedFiles={selectedFiles}
             setSelectedFiles={setSelectedFiles}
+            onFileClick={handleFileClick}
           />
         </div>
 
@@ -444,9 +467,10 @@ export default function ChatInterface() {
                     <p className="text-xs whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                   ) : (
                     <div className="relative">
-                      <MarkdownRenderer 
-                        content={msg.content} 
-                        isStreaming={isStreaming && i === messages.length - 1} 
+                      <MarkdownRenderer
+                        content={msg.content}
+                        isStreaming={isStreaming && i === messages.length - 1}
+                        onCitationClick={handleCitationClick}
                       />
                       {isLoading && i === messages.length - 1 && msg.content === "" && (
                         <div className="flex gap-1 items-center py-1 mt-2">
@@ -492,6 +516,26 @@ export default function ChatInterface() {
           </div>
         </div>
       </div>
+
+      {/* ── PDF Viewer Panel ──────────────────────────────────── */}
+      {/* On desktop: right-side panel that expands inline.       */}
+      {/* On mobile:  fixed overlay panel over the full screen.   */}
+      <div
+        className={`
+          md:relative md:flex md:h-full transition-all duration-300
+          ${
+            activeCitation
+              ? "fixed inset-y-0 right-0 z-50 w-full md:w-auto md:static md:z-auto"
+              : "hidden md:flex md:w-0"
+          }
+        `}
+      >
+        <PdfViewerPanel
+          citation={activeCitation}
+          onClose={() => setActiveCitation(null)}
+        />
+      </div>
+
     </div>
   );
 }
