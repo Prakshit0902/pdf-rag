@@ -3,7 +3,10 @@ from dotenv import load_dotenv
 import time
 from typing import Optional, List
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from fastapi import FastAPI, UploadFile, BackgroundTasks, Depends
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.responses import StreamingResponse
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -134,6 +137,12 @@ async def upload(
     return await upload_pdf(file, background_tasks, user_id=user_id)
 
 
+@app.get("/upload/files")
+async def list_files(user_id: str = Depends(get_current_user)):
+    """List all indexed PDF files for the authenticated user."""
+    return await list_uploaded_files(user_id=user_id)
+
+
 @app.get("/health")
 def health():
     """Lightweight health check used by load balancers and deployment platforms."""
@@ -161,7 +170,42 @@ async def all_jobs(user_id: str = Depends(get_current_user)):
     return get_all_jobs(user_id=user_id)
 
 
-@app.get("/upload/files")
-async def files(user_id: str = Depends(get_current_user)):
-    """List all uploaded PDF files."""
-    return await list_uploaded_files(user_id=user_id)
+@app.get("/files/preview")
+async def get_page_preview(filename: str, page: int, user_id: str = Depends(get_current_user)):
+    """Serve a pre-rendered PNG thumbnail for a specific page of an uploaded PDF."""
+    # Path construction mirrors process_pdf_pipeline
+    page_render_dir = os.path.join(BASE_DIR, "data", "page_renders", user_id, filename.replace(".pdf", ""))
+    image_path = os.path.join(page_render_dir, f"page_{page}.png")
+
+    if os.path.exists(image_path):
+        return FileResponse(image_path, media_type="image/png")
+
+    return JSONResponse(status_code=404, content={"message": "Preview not found"})
+
+
+@app.get("/files/pdf")
+async def get_pdf_file(filename: str, user_id: str = Depends(get_current_user)):
+    """Serve the raw PDF file bytes for in-browser rendering (e.g. PDF.js)."""
+    pdf_path = os.path.join(BASE_DIR, "data", "cleaned_pdfs", user_id, filename)
+    if os.path.exists(pdf_path):
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{filename}"'},
+        )
+    return JSONResponse(status_code=404, content={"message": "PDF not found"})
+
+
+@app.get("/files/info")
+async def get_file_info(filename: str, user_id: str = Depends(get_current_user)):
+    """Get metadata about an uploaded PDF, including total page count from pre-renders."""
+    filename_clean = filename.replace(".pdf", "")
+    page_render_dir = os.path.join(BASE_DIR, "data", "page_renders", user_id, filename_clean)
+    
+    total_pages = 0
+    if os.path.exists(page_render_dir):
+        png_files = [f for f in os.listdir(page_render_dir) if f.startswith("page_") and f.endswith(".png")]
+        total_pages = len(png_files)
+        
+    return {"filename": filename, "total_pages": total_pages}
+
