@@ -185,15 +185,17 @@ async def get_page_preview(filename: str, page: int, user_id: str = Depends(get_
 
 @app.get("/files/pdf")
 async def get_pdf_file(filename: str, user_id: str = Depends(get_current_user)):
-    """Serve the raw PDF file bytes for in-browser rendering (e.g. PDF.js)."""
+    """Serve the raw file bytes for in-browser rendering (e.g. PDF.js or text files)."""
     pdf_path = os.path.join(BASE_DIR, "data", "cleaned_pdfs", user_id, filename)
     if os.path.exists(pdf_path):
+        ext = os.path.splitext(filename)[1].lower()
+        media_type = "text/plain" if ext == ".txt" else "application/pdf"
         return FileResponse(
             pdf_path,
-            media_type="application/pdf",
+            media_type=media_type,
             headers={"Content-Disposition": f'inline; filename="{filename}"'},
         )
-    return JSONResponse(status_code=404, content={"message": "PDF not found"})
+    return JSONResponse(status_code=404, content={"message": "File not found"})
 
 
 @app.get("/files/info")
