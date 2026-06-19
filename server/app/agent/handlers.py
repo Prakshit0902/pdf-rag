@@ -31,7 +31,7 @@ PARSED_DIR = os.path.join(BASE_DIR, "data", "parsed")
 
 def load_metadata(filename: str, user_id: str) -> Optional[dict]:
     """Load pre-generated metadata JSON from disk."""
-    stem = filename.replace(".pdf", "")
+    stem = os.path.splitext(filename)[0]
     path = os.path.join(METADATA_DIR, user_id, f"{stem}.json")
     if not os.path.exists(path):
         return None
@@ -45,7 +45,7 @@ def load_metadata(filename: str, user_id: str) -> Optional[dict]:
 
 def load_all_parsed_chunks(filename: str, user_id: str) -> list:
     """Load all parsed chunks from disk JSON (bypasses Qdrant entirely)."""
-    stem = filename.replace(".pdf", "")
+    stem = os.path.splitext(filename)[0]
     path = os.path.join(PARSED_DIR, user_id, f"{stem}.json")
     if not os.path.exists(path):
         return []
@@ -73,11 +73,22 @@ def _resolve_active_files(
     if not os.path.isdir(user_parsed_dir):
         return []
 
-    return [
-        f.replace(".json", ".pdf")
-        for f in os.listdir(user_parsed_dir)
-        if f.endswith(".json")
-    ]
+    user_input_dir = os.path.join(BASE_DIR, "data", "cleaned_pdfs", user_id)
+    active_files = []
+    
+    for f in os.listdir(user_parsed_dir):
+        if f.endswith(".json"):
+            stem = f[:-5] # remove '.json'
+            found = False
+            for ext in [".pdf", ".txt"]:
+                orig_file = stem + ext
+                if os.path.exists(os.path.join(user_input_dir, orig_file)):
+                    active_files.append(orig_file)
+                    found = True
+                    break
+            if not found:
+                active_files.append(stem + ".pdf")
+    return active_files
 
 
 # ── Tier 1: Document Summary ────────────────────────────────────────

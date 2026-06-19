@@ -195,7 +195,7 @@ async def generate_and_save_metadata(
         user_metadata_dir = os.path.join(METADATA_DIR, user_id)
         os.makedirs(user_metadata_dir, exist_ok=True)
 
-        filename_stem = filename.replace(".pdf", "")
+        filename_stem = os.path.splitext(filename)[0]
         output_path = os.path.join(user_metadata_dir, f"{filename_stem}.json")
 
         with open(output_path, "w", encoding="utf-8") as f:
