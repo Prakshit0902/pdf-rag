@@ -53,6 +53,10 @@ export default function FileUpload({
 }) {
   const { getToken, isLoaded, userId } = useAuth();
   
+  const [activeTab, setActiveTab] = useState<"files" | "paste" | "youtube">("files");
+  const [pasteTitle, setPasteTitle] = useState("");
+  const [pasteText, setPasteText] = useState("");
+
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -226,8 +230,11 @@ export default function FileUpload({
         alert(`File ${file.name} exceeds 50MB limit`);
         continue;
       }
-      if (file.type !== "application/pdf" && !file.name.endsWith(".pdf")) {
-        alert(`Only PDF files are allowed. Skipped ${file.name}`);
+      
+      const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
+      const isTxt = file.type === "text/plain" || file.name.endsWith(".txt");
+      if (!isPdf && !isTxt) {
+        alert(`Only PDF and TXT files are allowed. Skipped ${file.name}`);
         continue;
       }
       
@@ -246,6 +253,38 @@ export default function FileUpload({
     if (newTasks.length > 0) {
       setUploadTasks((prev) => [...prev, ...newTasks]);
     }
+  };
+
+  const handlePasteSubmit = (title: string, text: string) => {
+    if (!title.trim()) {
+      alert("Please enter a title for your pasted text.");
+      return;
+    }
+    if (!text.trim()) {
+      alert("Please paste some text content.");
+      return;
+    }
+
+    let filename = title.trim();
+    if (!filename.toLowerCase().endsWith(".txt")) {
+      filename += ".txt";
+    }
+
+    const blob = new Blob([text], { type: "text/plain" });
+    const file = new File([blob], filename, { type: "text/plain" });
+
+    const taskId = `${filename}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newTask: UploadTask = {
+      id: taskId,
+      file,
+      filename,
+      status: "queued",
+      progress: 0,
+      jobId: null,
+      error: null,
+    };
+
+    setUploadTasks((prev) => [...prev, newTask]);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -324,7 +363,7 @@ export default function FileUpload({
   };
 
   return (
-    <div className={`w-full ${mode === "sidebar" ? "space-y-4" : "bg-zinc-900/40 backdrop-blur-md rounded-2xl p-6 border border-zinc-800/80 shadow-xl space-y-6"}`}>
+    <div className={`w-full ${mode === "sidebar" ? "space-y-3" : "bg-zinc-900/40 backdrop-blur-md rounded-2xl p-6 border border-zinc-800/80 shadow-xl space-y-5"}`}>
       {mode === "sidebar" ? (
         <div className="flex items-center justify-between">
           <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
@@ -346,44 +385,146 @@ export default function FileUpload({
         </div>
       )}
 
-      {/* Drag & Drop Area */}
-      <div
-        className={`border border-dashed border-zinc-800 rounded-xl text-center cursor-pointer hover:border-zinc-700 hover:bg-zinc-900/20 transition-all duration-300 group ${
-          mode === "sidebar" ? "p-4" : "p-8"
-        }`}
-        onClick={() => fileInputRef.current?.click()}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={handleDrop}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf"
-          multiple
-          className="hidden"
-          onChange={handleFileChange}
-        />
-        <div className="space-y-2">
-          {mode !== "sidebar" && (
-            <div className="w-12 h-12 rounded-xl bg-zinc-950 flex items-center justify-center mx-auto border border-zinc-900 group-hover:border-indigo-500/30 group-hover:bg-indigo-950/20 transition-all duration-300">
-              <svg className="w-6 h-6 text-zinc-500 group-hover:text-indigo-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+      {/* Tabs Menu */}
+      <div className="flex border-b border-zinc-800/80 text-[11px] font-semibold">
+        <button
+          onClick={() => setActiveTab("files")}
+          className={`flex-1 pb-1.5 text-center border-b-2 transition-all cursor-pointer ${
+            activeTab === "files"
+              ? "border-indigo-500 text-zinc-200"
+              : "border-transparent text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          Files
+        </button>
+        <button
+          onClick={() => setActiveTab("paste")}
+          className={`flex-1 pb-1.5 text-center border-b-2 transition-all cursor-pointer ${
+            activeTab === "paste"
+              ? "border-indigo-500 text-zinc-200"
+              : "border-transparent text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          Paste Text
+        </button>
+        <button
+          onClick={() => setActiveTab("youtube")}
+          className={`flex-1 pb-1.5 text-center border-b-2 transition-all cursor-pointer ${
+            activeTab === "youtube"
+              ? "border-indigo-500 text-zinc-200"
+              : "border-transparent text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          YouTube
+        </button>
+      </div>
+
+      {/* Tab Contents */}
+      {activeTab === "files" && (
+        <div
+          className={`border border-dashed border-zinc-800 rounded-xl text-center cursor-pointer hover:border-zinc-700 hover:bg-zinc-900/20 transition-all duration-300 group ${
+            mode === "sidebar" ? "p-4" : "p-8"
+          }`}
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDrop}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.txt"
+            multiple
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <div className="space-y-2">
+            {mode !== "sidebar" && (
+              <div className="w-12 h-12 rounded-xl bg-zinc-950 flex items-center justify-center mx-auto border border-zinc-900 group-hover:border-indigo-500/30 group-hover:bg-indigo-950/20 transition-all duration-300">
+                <svg className="w-6 h-6 text-zinc-500 group-hover:text-indigo-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </div>
+            )}
+            <div className="text-zinc-400 flex items-center justify-center gap-2">
+              {mode === "sidebar" && (
+                <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              )}
+              <span className="font-semibold text-xs group-hover:text-zinc-200 transition-colors">
+                {mode === "sidebar" ? "Upload PDF / TXT" : "Select PDF / TXT or Drag & Drop"}
+              </span>
+            </div>
+            {mode !== "sidebar" && <p className="text-xs text-zinc-600">Max file size 50MB per file</p>}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "paste" && (
+        <div className="space-y-2 bg-zinc-950/10 p-1 rounded-xl">
+          <input
+            type="text"
+            placeholder="Document Title (e.g. notes.txt)"
+            value={pasteTitle}
+            onChange={(e) => setPasteTitle(e.target.value)}
+            className="w-full px-3 py-2 bg-zinc-950/65 border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500 text-xs text-zinc-200 placeholder-zinc-600 transition-all"
+          />
+          <textarea
+            placeholder="Paste your text context here..."
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            rows={mode === "sidebar" ? 4 : 6}
+            className="w-full px-3 py-2 bg-zinc-950/65 border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500 text-xs text-zinc-200 placeholder-zinc-600 resize-none font-sans transition-all"
+          />
+          <button
+            onClick={() => {
+              handlePasteSubmit(pasteTitle, pasteText);
+              setPasteTitle("");
+              setPasteText("");
+            }}
+            disabled={!pasteTitle.trim() || !pasteText.trim()}
+            className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800/80 text-white disabled:text-zinc-500 rounded-xl text-xs font-bold shadow-md disabled:shadow-none hover:shadow-[0_0_12px_rgba(99,102,241,0.25)] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Text Context
+          </button>
+        </div>
+      )}
+
+      {activeTab === "youtube" && (
+        <div className="space-y-3 p-3 bg-zinc-950/20 border border-zinc-800/40 rounded-xl">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
+              <svg className="w-4 h-4 text-rose-500 fill-current" viewBox="0 0 24 24">
+                <path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.108C19.524 3.545 12 3.545 12 3.545s-7.525 0-9.388.51a3.002 3.002 0 0 0-2.11 2.108C0 8.028 0 12 0 12s0 3.972.502 5.837a3.003 3.003 0 0 0 2.11 2.108c1.863.51 9.388.51 9.388.51s7.525 0 9.388-.51a3.002 3.002 0 0 0 2.11-2.108C24 15.972 24 12 24 12s0-3.972-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
               </svg>
             </div>
-          )}
-          <div className="text-zinc-400 flex items-center justify-center gap-2">
-            {mode === "sidebar" && (
-              <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            )}
-            <span className="font-semibold text-xs group-hover:text-zinc-200 transition-colors">
-              {mode === "sidebar" ? "Upload PDFs" : "Select PDFs or Drag & Drop"}
-            </span>
+            <div className="min-w-0">
+              <h4 className="text-xs font-semibold text-zinc-300">YouTube Summary</h4>
+              <p className="text-[10px] text-zinc-500 truncate">Extract transcripts and index videos.</p>
+            </div>
           </div>
-          {mode !== "sidebar" && <p className="text-xs text-zinc-600">Max file size 50MB per file</p>}
+          
+          <input
+            type="text"
+            disabled
+            placeholder="YouTube Video URL (Coming Soon)"
+            className="w-full px-3 py-2 bg-zinc-950/20 border border-zinc-900 rounded-xl text-xs text-zinc-600 placeholder-zinc-700 cursor-not-allowed"
+          />
+          
+          <button
+            disabled
+            className="w-full py-2 bg-zinc-950 border border-zinc-900 text-zinc-600 rounded-xl text-xs font-semibold cursor-not-allowed flex items-center justify-center gap-1.5"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            Summarize Video
+          </button>
         </div>
-      </div>
+      )}
 
       {/* Upload Tasks Queue List */}
       {uploadTasks.length > 0 && (
