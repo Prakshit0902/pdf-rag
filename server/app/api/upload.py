@@ -20,7 +20,7 @@ from app.ingestion.cache import (
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
-ALLOWED_EXTENSIONS = {".pdf"}
+ALLOWED_EXTENSIONS = {".pdf", ".txt"}
 
 
 class JobStatus(str, Enum):
@@ -66,17 +66,11 @@ job_store: Dict[str, Job] = {}
 
 def validate_file(file: UploadFile) -> None:
     """Validate uploaded file."""
-    if file.content_type != "application/pdf":
-        raise HTTPException(
-            status_code=400,
-            detail="Only PDF files are allowed"
-        )
-
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail="Only PDF files are allowed"
+            detail="Only PDF and TXT files are allowed"
         )
 
 
@@ -127,41 +121,63 @@ def process_pdf_pipeline(filename: str, job_id: str, user_id: str, pdf_hash: Opt
         pdf_path = os.path.join(user_input_dir, filename)
 
         if not os.path.exists(pdf_path):
-            raise FileNotFoundError(f"PDF file not found at {pdf_path}")
+            raise FileNotFoundError(f"File not found at {pdf_path}")
 
-        # -------------------------
-        # Step 1: Extract Images
-        # -------------------------
-        from app.parsing.extract_images import extract_images_from_pdf
+        # Check if PDF or TXT
+        is_pdf = filename.lower().endswith(".pdf")
+        name_without_ext = os.path.splitext(filename)[0]
 
-        pdf_image_dir = os.path.join(
-            user_image_dir,
-            filename.replace(".pdf", "")
-        )
+        if is_pdf:
+            # -------------------------
+            # Step 1: Extract Images
+            # -------------------------
+            from app.parsing.extract_images import extract_images_from_pdf
 
-        image_map = extract_images_from_pdf(pdf_path, pdf_image_dir)
-        print(f"[{job_id}] Extracted {sum(len(v) for v in image_map.values())} images")
+            pdf_image_dir = os.path.join(
+                user_image_dir,
+                name_without_ext
+            )
 
-        # -------------------------
-        # Step 2: Render Pages
-        # -------------------------
-        from app.parsing.render_pages import render_pdf_pages
+            image_map = extract_images_from_pdf(pdf_path, pdf_image_dir)
+            print(f"[{job_id}] Extracted {sum(len(v) for v in image_map.values())} images")
 
-        pdf_render_dir = os.path.join(
-            user_page_render_dir,
-            filename.replace(".pdf", "")
-        )
+            # -------------------------
+            # Step 2: Render Pages
+            # -------------------------
+            from app.parsing.render_pages import render_pdf_pages
 
-        page_render_map = render_pdf_pages(pdf_path, pdf_render_dir)
-        print(f"[{job_id}] Rendered {len(page_render_map)} pages")
+            pdf_render_dir = os.path.join(
+                user_page_render_dir,
+                name_without_ext
+            )
 
-        # -------------------------
-        # Step 3: Parse PDF
-        # -------------------------
-        from app.parsing.parser import parse_pdf
+            page_render_map = render_pdf_pages(pdf_path, pdf_render_dir)
+            print(f"[{job_id}] Rendered {len(page_render_map)} pages")
 
-        documents = parse_pdf(pdf_path)
-        print(f"[{job_id}] Parsed {len(documents)} document blocks")
+            # -------------------------
+            # Step 3: Parse PDF
+            # -------------------------
+            from app.parsing.parser import parse_pdf
+
+            documents = parse_pdf(pdf_path)
+            print(f"[{job_id}] Parsed {len(documents)} document blocks")
+        else:
+            # It's a text file
+            image_map = {}
+            page_render_map = {}
+
+            from llama_index.core import Document
+            with open(pdf_path, "r", encoding="utf-8", errors="ignore") as f:
+                text_content = f.read()
+
+            documents = [Document(
+                text=text_content,
+                metadata={
+                    "file_path": pdf_path,
+                    "source": "txt",
+                }
+            )]
+            print(f"[{job_id}] Loaded text file directly")
 
         # -------------------------
         # Step 4: Build Chunks
@@ -180,7 +196,7 @@ def process_pdf_pipeline(filename: str, job_id: str, user_id: str, pdf_hash: Opt
         # -------------------------
         output_path = os.path.join(
             user_parsed_dir,
-            filename.replace(".pdf", ".json")
+            f"{name_without_ext}.json"
         )
 
         with open(output_path, "w", encoding="utf-8") as f:
@@ -319,7 +335,7 @@ def get_all_jobs(user_id: str = "default_tenant") -> JSONResponse:
 
 
 async def list_uploaded_files(user_id: str = "default_tenant") -> JSONResponse:
-    """List uploaded PDF files from database or local directory fallback."""
+    """List uploaded files from database or local directory fallback."""
     from app.vectorstore.supabase_client import is_supabase_configured, list_documents
     if is_supabase_configured() and user_id != "default_tenant":
         docs = await list_documents(user_id)
@@ -330,13 +346,13 @@ async def list_uploaded_files(user_id: str = "default_tenant") -> JSONResponse:
     os.makedirs(user_input_dir, exist_ok=True)
     files = [
         f for f in os.listdir(user_input_dir)
-        if f.endswith(".pdf")
+        if f.endswith(".pdf") or f.endswith(".txt")
     ]
     return JSONResponse(content={"files": files})
 
 
 async def delete_uploaded_file(filename: str, user_id: str) -> JSONResponse:
-    """Delete an uploaded PDF and all its artifacts/DB connections cleanly."""
+    """Delete an uploaded file and all its artifacts/DB connections cleanly."""
     import shutil
     from app.vectorstore.supabase_client import delete_document, delete_chat_sessions_by_file
     from app.vectorstore.qdrant_client import client as qdrant_client
@@ -344,12 +360,13 @@ async def delete_uploaded_file(filename: str, user_id: str) -> JSONResponse:
     from app.retrieval.bm25_index import reload_index
     from app.ingestion.cache import delete_cache_by_filename
 
+    name_without_ext = os.path.splitext(filename)[0]
     # 1. Disk cleanup
     user_input_path = os.path.join(BASE_DIR, "data", "cleaned_pdfs", user_id, filename)
-    user_parsed_path = os.path.join(BASE_DIR, "data", "parsed", user_id, filename.replace(".pdf", ".json"))
-    user_image_path = os.path.join(BASE_DIR, "data", "images", user_id, filename.replace(".pdf", ""))
-    user_page_render_path = os.path.join(BASE_DIR, "data", "page_renders", user_id, filename.replace(".pdf", ""))
-    user_metadata_path = os.path.join(BASE_DIR, "data", "metadata", user_id, filename.replace(".pdf", ".json"))
+    user_parsed_path = os.path.join(BASE_DIR, "data", "parsed", user_id, f"{name_without_ext}.json")
+    user_image_path = os.path.join(BASE_DIR, "data", "images", user_id, name_without_ext)
+    user_page_render_path = os.path.join(BASE_DIR, "data", "page_renders", user_id, name_without_ext)
+    user_metadata_path = os.path.join(BASE_DIR, "data", "metadata", user_id, f"{name_without_ext}.json")
 
     try:
         if os.path.exists(user_input_path):

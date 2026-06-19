@@ -22,7 +22,7 @@ def load_document(
     path = os.path.join(
         PARSED_DIR,
         user_id,
-        source_file.replace(".pdf", ".json")
+        os.path.splitext(source_file)[0] + ".json"
     )
 
     if not os.path.exists(path):
