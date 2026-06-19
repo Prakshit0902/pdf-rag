@@ -36,6 +36,7 @@ interface PdfViewerPanelProps {
 export default function PdfViewerPanel({ citation, onClose }: PdfViewerPanelProps) {
   const { getToken } = useAuth();
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [txtContent, setTxtContent] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -59,8 +60,9 @@ export default function PdfViewerPanel({ citation, onClose }: PdfViewerPanelProp
       setIsLoading(true);
       setLoadError(false);
       setPdfUrl(null);
+      setTxtContent(null);
 
-      const fetchPdf = async () => {
+      const fetchFile = async () => {
         try {
           const token = await getToken();
           const headers: Record<string, string> = {};
@@ -78,11 +80,19 @@ export default function PdfViewerPanel({ citation, onClose }: PdfViewerPanelProp
             return;
           }
 
-          const blob = await res.blob();
-          if (active) {
-            const objectUrl = URL.createObjectURL(blob);
-            currentUrl = objectUrl;
-            setPdfUrl(objectUrl);
+          const isTxt = citation.source.toLowerCase().endsWith(".txt");
+          if (isTxt) {
+            const text = await res.text();
+            if (active) {
+              setTxtContent(text);
+            }
+          } else {
+            const blob = await res.blob();
+            if (active) {
+              const objectUrl = URL.createObjectURL(blob);
+              currentUrl = objectUrl;
+              setPdfUrl(objectUrl);
+            }
           }
         } catch {
           if (active) setLoadError(true);
@@ -91,7 +101,7 @@ export default function PdfViewerPanel({ citation, onClose }: PdfViewerPanelProp
         }
       };
 
-      fetchPdf();
+      fetchFile();
     }
 
     return () => {
@@ -126,9 +136,15 @@ export default function PdfViewerPanel({ citation, onClose }: PdfViewerPanelProp
             <div className="flex items-center gap-2 min-w-0">
               {/* File Icon */}
               <div className="w-7 h-7 rounded bg-[#202224] flex items-center justify-center flex-shrink-0 border border-zinc-700/30">
-                <svg className="w-4 h-4 text-red-500 fill-current" viewBox="0 0 24 24">
-                  <path d="M11.362 2C7.656 2 6 3.656 6 7.362v9.276C6 20.344 7.656 22 11.362 22h1.276C16.344 22 18 20.344 18 16.638V7.362C18 3.656 16.344 2 12.638 2h-1.276zm0 2h1.276c2.518 0 3.362.844 3.362 3.362v9.276c0 2.518-.844 3.362-3.362 3.362h-1.276c-2.518 0-3.362-.844-3.362-3.362V7.362C8 4.844 8.844 4 11.362 4z" />
-                </svg>
+                {citation.source.toLowerCase().endsWith(".txt") ? (
+                  <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 text-red-500 fill-current" viewBox="0 0 24 24">
+                    <path d="M11.362 2C7.656 2 6 3.656 6 7.362v9.276C6 20.344 7.656 22 11.362 22h1.276C16.344 22 18 20.344 18 16.638V7.362C18 3.656 16.344 2 12.638 2h-1.276zm0 2h1.276c2.518 0 3.362.844 3.362 3.362v9.276c0 2.518-.844 3.362-3.362 3.362h-1.276c-2.518 0-3.362-.844-3.362-3.362V7.362C8 4.844 8.844 4 11.362 4z" />
+                  </svg>
+                )}
               </div>
               <p className="text-xs font-semibold text-zinc-200 truncate max-w-[280px] md:max-w-[400px]" title={citation.source}>
                 {citation.source}
@@ -175,7 +191,7 @@ export default function PdfViewerPanel({ citation, onClose }: PdfViewerPanelProp
                   Try Again
                 </button>
               </div>
-            ) : pdfUrl ? (
+            ) : pdfUrl && !citation.source.toLowerCase().endsWith(".txt") ? (
               /* PDF iframe with native PDF Viewer controls (zoom, page count scroll sync are native to the browser) */
               <iframe
                 key={`${citation.source}-${currentPage}-${retryKey}`}
@@ -183,6 +199,11 @@ export default function PdfViewerPanel({ citation, onClose }: PdfViewerPanelProp
                 className="w-full h-full border-none bg-[#525659]"
                 title={`PDF Viewer - ${citation.source}`}
               />
+            ) : txtContent ? (
+              /* Plain Text Viewer */
+              <div className="w-full h-full overflow-y-auto p-8 bg-[#18181b] text-zinc-300 font-mono text-sm leading-relaxed whitespace-pre-wrap select-text">
+                {txtContent}
+              </div>
             ) : null}
 
             {/* ── Collapsible Citation Overlay Drawer (floating at bottom) ───── */}
