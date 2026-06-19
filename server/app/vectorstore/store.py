@@ -1,3 +1,4 @@
+import time
 from qdrant_client.models import (
     Distance,
     VectorParams,
@@ -78,7 +79,7 @@ def create_collection(vector_size: int):
 
 
 
-def store_chunks(chunks, embeddings, user_id="default_tenant"):
+def store_chunks(chunks, embeddings, user_id="default_tenant", retries=3, delay=2.0):
 
     points = []
 
@@ -97,9 +98,17 @@ def store_chunks(chunks, embeddings, user_id="default_tenant"):
 
         points.append(point)
 
-    client.upsert(
-        collection_name=COLLECTION_NAME,
-        points=points
-    )
-
-    print(f"Stored {len(points)} chunks with user_id: {user_id}")
+    for attempt in range(retries):
+        try:
+            client.upsert(
+                collection_name=COLLECTION_NAME,
+                points=points
+            )
+            print(f"Stored {len(points)} chunks with user_id: {user_id}")
+            return
+        except Exception as e:
+            if attempt == retries - 1:
+                raise e
+            print(f"[store] Qdrant upsert attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
+            time.sleep(delay)
+            delay *= 2
