@@ -2,6 +2,10 @@ import os
 import uuid
 import asyncio
 import json
+import re
+import glob
+import tempfile
+import yt_dlp
 from datetime import datetime
 from typing import Dict, Optional, Any
 from enum import Enum
@@ -420,5 +424,184 @@ async def delete_uploaded_file(filename: str, user_id: str) -> JSONResponse:
         content={
             "status": "success",
             "message": f"Successfully deleted document '{filename}' and all related resources."
+        }
+    )
+
+
+def extract_youtube_video_id(url: str) -> Optional[str]:
+    """Extract YouTube video ID from standard, short, share, embed, or mixed links."""
+    patterns = [
+        r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=([^&\s]+)',
+        r'(?:https?://)?(?:www\.)?youtu\.be/([^?\s]+)',
+        r'(?:https?://)?(?:www\.)?youtube\.com/embed/([^?\s]+)',
+        r'(?:https?://)?(?:www\.)?youtube\.com/v/([^?\s]+)',
+        r'(?:https?://)?(?:www\.)?youtube\.com/shorts/([^?\s]+)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+
+def parse_vtt(vtt_path: str) -> str:
+    """Parses a WebVTT file in pure Python and returns clean plain text without timestamps/metadata."""
+    if not os.path.exists(vtt_path):
+        return ""
+
+    with open(vtt_path, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+
+    # Normalize line endings
+    content = content.replace("\r\n", "\n")
+    
+    # Split into blocks (separated by empty lines)
+    blocks = content.split("\n\n")
+    
+    captions = []
+    for block in blocks:
+        lines = block.strip().split("\n")
+        # Find the line containing the timestamp
+        timestamp_idx = -1
+        for i, line in enumerate(lines):
+            if "-->" in line:
+                timestamp_idx = i
+                break
+        
+        if timestamp_idx != -1:
+            # The text lines start after the timestamp
+            text_lines = lines[timestamp_idx + 1:]
+            # Clean and join the text lines for this cue
+            clean_cue_lines = []
+            for line in text_lines:
+                cleaned = re.sub(r'<[^>]+>', '', line).strip()
+                if cleaned:
+                    clean_cue_lines.append(cleaned)
+            
+            if clean_cue_lines:
+                cue_text = " ".join(clean_cue_lines)
+                captions.append(cue_text)
+
+    # YouTube auto-captions have overlapping text.
+    # If a cue text is a prefix of the next cue text, we skip it.
+    deduplicated = []
+    for i, cap in enumerate(captions):
+        if i < len(captions) - 1:
+            next_cap = captions[i + 1]
+            if next_cap.strip().startswith(cap.strip()):
+                continue
+        deduplicated.append(cap)
+        
+    return " ".join(deduplicated)
+
+
+def process_youtube_pipeline(url: str, video_id: str, job_id: str, user_id: str) -> None:
+    """Background task to download YouTube subtitles, save to disk, and index."""
+    job = job_store.get(job_id)
+    if not job:
+        return
+
+    try:
+        job.status = JobStatus.PROCESSING
+
+        user_input_dir = os.path.join(BASE_DIR, "data", "cleaned_pdfs", user_id)
+        os.makedirs(user_input_dir, exist_ok=True)
+
+        # Download subtitles using yt-dlp into a temporary directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ydl_opts = {
+                'skip_download': True,
+                'writeautomaticsub': True,
+                'writesubtitles': True,
+                'subtitleslangs': ['en', 'en-US'],
+                'outtmpl': os.path.join(temp_dir, '%(id)s'),
+                'quiet': True,
+                'no_warnings': True,
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                video_title = info.get('title', video_id)
+                # Clean up video title for safe filename
+                safe_title = "".join(c for c in video_title if c.isalnum() or c in " -_").strip()
+                ydl.download([url])
+
+            # Locate downloaded subtitle file(s)
+            vtt_files = glob.glob(os.path.join(temp_dir, f"{video_id}.*"))
+            if not vtt_files:
+                raise Exception("No subtitles or captions found for this video.")
+
+            vtt_path = vtt_files[0]
+            clean_text = parse_vtt(vtt_path)
+
+            if not clean_text.strip():
+                raise Exception("Subtitles download completed but text content was empty.")
+
+            # Create clean txt header metadata
+            header = (
+                f"YouTube Video: {video_title}\n"
+                f"URL: {url}\n"
+                f"Video ID: {video_id}\n"
+                f"Indexed At: {datetime.utcnow().isoformat()}\n\n"
+            )
+            full_content = header + clean_text
+
+            # Save the clean text document to disk
+            filename = f"YouTube - {safe_title} ({video_id}).txt"
+            filepath = os.path.join(user_input_dir, filename)
+
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(full_content)
+
+        # Update job with the actual filename
+        job.filename = filename
+
+        # Compute file hash for caching
+        file_bytes = full_content.encode("utf-8")
+        file_hash = compute_bytes_hash(file_bytes)
+
+        # Delegate indexing to standard pipeline
+        process_pdf_pipeline(filename, job_id, user_id, pdf_hash=file_hash)
+
+    except Exception as e:
+        job.status = JobStatus.FAILED
+        job.error = str(e)
+        job.completed_at = datetime.utcnow()
+        print(f"[{job_id}] YouTube pipeline failed: {e}")
+
+
+async def upload_youtube_url(
+    url: str,
+    background_tasks: BackgroundTasks,
+    user_id: str = "default_tenant"
+) -> JSONResponse:
+    """Validate YouTube URL, register a background job, and queue processing."""
+    video_id = extract_youtube_video_id(url)
+    if not video_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid YouTube URL format"
+        )
+
+    job_id = str(uuid.uuid4())
+    # Temporary filename placeholder until we download subtitles and fetch title
+    job = Job(job_id=job_id, filename=f"youtube_{video_id}", user_id=user_id)
+    job_store[job_id] = job
+
+    background_tasks.add_task(
+        process_youtube_pipeline,
+        url,
+        video_id,
+        job_id,
+        user_id
+    )
+
+    return JSONResponse(
+        status_code=202,
+        content={
+            "message": "YouTube processing started",
+            "job_id": job_id,
+            "filename": f"youtube_{video_id}",
+            "status": job.status.value
         }
     )
