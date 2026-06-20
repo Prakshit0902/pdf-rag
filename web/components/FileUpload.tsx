@@ -7,7 +7,7 @@ type JobStatus = "queued" | "uploading" | "processing" | "completed" | "failed";
 
 interface UploadTask {
   id: string;
-  file: File;
+  file: File | null;
   filename: string;
   status: JobStatus;
   progress: number;
@@ -20,7 +20,7 @@ const getApiBaseUrl = () => {
     process.env.NEXT_PUBLIC_NODE_ENV || 
     process.env.NODE_ENV || 
     "development"
-  ).toLowerCase();
+  ).toLowerCase().replace(/"/g, "");
 
   if (nodeEnv === "production") {
     return (
@@ -56,6 +56,8 @@ export default function FileUpload({
   const [activeTab, setActiveTab] = useState<"files" | "paste" | "youtube">("files");
   const [pasteTitle, setPasteTitle] = useState("");
   const [pasteText, setPasteText] = useState("");
+  const [ytUrl, setYtUrl] = useState("");
+  const [isSubmittingYt, setIsSubmittingYt] = useState(false);
 
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
@@ -127,6 +129,7 @@ export default function FileUpload({
           updateTaskStatus(taskId, {
             status: "completed",
             progress: 100,
+            filename: data.filename,
           });
           // Refresh catalog
           fetchUploadedFiles();
@@ -156,7 +159,18 @@ export default function FileUpload({
 
   // Upload file pipeline runner
   const uploadFileTask = useCallback(async (task: UploadTask) => {
+    if (task.jobId) {
+      updateTaskStatus(task.id, { status: "processing", progress: 40 });
+      pollTaskStatus(task.id, task.jobId);
+      return;
+    }
+
     updateTaskStatus(task.id, { status: "uploading", progress: 15 });
+
+    if (!task.file) {
+      updateTaskStatus(task.id, { status: "failed", error: "No file provided" });
+      return;
+    }
 
     const formData = new FormData();
     formData.append("file", task.file);
@@ -285,6 +299,56 @@ export default function FileUpload({
     };
 
     setUploadTasks((prev) => [...prev, newTask]);
+  };
+
+  const handleYoutubeSubmit = async (url: string) => {
+    if (!url.trim()) {
+      alert("Please enter a YouTube video URL.");
+      return;
+    }
+    
+    setIsSubmittingYt(true);
+    try {
+      const token = await getToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(`${API_BASE}/upload/youtube`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ url }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "Failed to start YouTube processing");
+      }
+
+      const data = await response.json();
+      
+      const taskId = `youtube-${data.job_id || Date.now()}`;
+      const newTask: UploadTask = {
+        id: taskId,
+        file: null,
+        filename: data.filename || `youtube_${Date.now()}`,
+        status: "queued",
+        progress: 0,
+        jobId: data.job_id,
+        error: null,
+      };
+
+      setUploadTasks((prev) => [...prev, newTask]);
+      setYtUrl(""); // Reset input
+
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to process YouTube URL");
+    } finally {
+      setIsSubmittingYt(false);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -502,26 +566,41 @@ export default function FileUpload({
               </svg>
             </div>
             <div className="min-w-0">
-              <h4 className="text-xs font-semibold text-zinc-300">YouTube Summary</h4>
+              <h4 className="text-xs font-semibold text-zinc-300">YouTube Indexer</h4>
               <p className="text-[10px] text-zinc-500 truncate">Extract transcripts and index videos.</p>
             </div>
           </div>
           
           <input
             type="text"
-            disabled
-            placeholder="YouTube Video URL (Coming Soon)"
-            className="w-full px-3 py-2 bg-zinc-950/20 border border-zinc-900 rounded-xl text-xs text-zinc-600 placeholder-zinc-700 cursor-not-allowed"
+            value={ytUrl}
+            onChange={(e) => setYtUrl(e.target.value)}
+            disabled={isSubmittingYt}
+            placeholder="YouTube Video URL (e.g. https://youtu.be/...)"
+            className="w-full px-3 py-2 bg-zinc-950/65 border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-rose-500/50 focus:border-rose-500 text-xs text-zinc-200 placeholder-zinc-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           />
           
           <button
-            disabled
-            className="w-full py-2 bg-zinc-950 border border-zinc-900 text-zinc-600 rounded-xl text-xs font-semibold cursor-not-allowed flex items-center justify-center gap-1.5"
+            onClick={() => handleYoutubeSubmit(ytUrl)}
+            disabled={isSubmittingYt || !ytUrl.trim()}
+            className="w-full py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-zinc-800/80 text-white disabled:text-zinc-500 rounded-xl text-xs font-bold shadow-md disabled:shadow-none hover:shadow-[0_0_12px_rgba(244,63,94,0.25)] transition-all cursor-pointer flex items-center justify-center gap-1.5"
           >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-            Summarize Video
+            {isSubmittingYt ? (
+              <>
+                <svg className="animate-spin h-3.5 w-3.5 text-zinc-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Initiating...
+              </>
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Summarize Video
+              </>
+            )}
           </button>
         </div>
       )}
