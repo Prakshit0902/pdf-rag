@@ -25,8 +25,13 @@ from app.api.upload import (
     get_job_status,
     get_all_jobs,
     list_uploaded_files,
-    delete_uploaded_file
+    delete_uploaded_file,
+    upload_youtube_url
 )
+
+
+class YouTubeRequest(BaseModel):
+    url: str
 
 
 load_dotenv()
@@ -135,6 +140,18 @@ async def upload(
     through the complete pipeline (parse → chunk → index).
     """
     return await upload_pdf(file, background_tasks, user_id=user_id)
+
+
+@app.post("/upload/youtube")
+async def upload_youtube(
+    request: YouTubeRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(get_current_user)
+):
+    """
+    Ingest a YouTube video transcript.
+    """
+    return await upload_youtube_url(request.url, background_tasks, user_id=user_id)
 
 
 @app.get("/upload/files")
