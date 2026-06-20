@@ -23,7 +23,7 @@ const getApiBaseUrl = () => {
     process.env.NEXT_PUBLIC_NODE_ENV || 
     process.env.NODE_ENV || 
     "development"
-  ).toLowerCase();
+  ).toLowerCase().replace(/"/g, "");
 
   if (nodeEnv === "production") {
     return (
