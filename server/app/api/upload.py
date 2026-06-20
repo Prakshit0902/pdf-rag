@@ -428,8 +428,9 @@ async def delete_uploaded_file(filename: str, user_id: str) -> JSONResponse:
     )
 
 
-def extract_youtube_video_id(url: str) -> Optional[str]:
-    """Extract YouTube video ID from standard, short, share, embed, or mixed links."""
+def extract_youtube_info(url: str) -> Optional[Dict[str, str]]:
+    """Extract YouTube video or playlist ID."""
+    video_id = None
     patterns = [
         r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=([^&\s]+)',
         r'(?:https?://)?(?:www\.)?youtu\.be/([^?\s]+)',
@@ -440,7 +441,20 @@ def extract_youtube_video_id(url: str) -> Optional[str]:
     for pattern in patterns:
         match = re.search(pattern, url)
         if match:
-            return match.group(1)
+            video_id = match.group(1)
+            break
+            
+    playlist_id = None
+    playlist_match = re.search(r'[?&]list=([^&\s]+)', url)
+    if playlist_match:
+        playlist_id = playlist_match.group(1)
+        
+    if video_id:
+        # If there's a video ID, we treat it as a video (ignore playlist)
+        return {"type": "video", "id": video_id}
+    elif playlist_id:
+        return {"type": "playlist", "id": playlist_id}
+        
     return None
 
 
@@ -495,7 +509,7 @@ def parse_vtt(vtt_path: str) -> str:
     return " ".join(deduplicated)
 
 
-def process_youtube_pipeline(url: str, video_id: str, job_id: str, user_id: str) -> None:
+def process_youtube_pipeline(url: str, item_id: str, job_id: str, user_id: str, is_playlist: bool = False) -> None:
     """Background task to download YouTube subtitles, save to disk, and index."""
     job = job_store.get(job_id)
     if not job:
@@ -517,37 +531,54 @@ def process_youtube_pipeline(url: str, video_id: str, job_id: str, user_id: str)
                 'outtmpl': os.path.join(temp_dir, '%(id)s'),
                 'quiet': True,
                 'no_warnings': True,
+                'noplaylist': not is_playlist,
             }
+            if is_playlist:
+                ydl_opts['playlistend'] = 5  # limit to first 5 videos
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
-                video_title = info.get('title', video_id)
+                if 'entries' in info:
+                    video_title = info.get('title', f"Playlist_{item_id}")
+                else:
+                    video_title = info.get('title', item_id)
                 # Clean up video title for safe filename
                 safe_title = "".join(c for c in video_title if c.isalnum() or c in " -_").strip()
                 ydl.download([url])
 
             # Locate downloaded subtitle file(s)
-            vtt_files = glob.glob(os.path.join(temp_dir, f"{video_id}.*"))
+            vtt_files = glob.glob(os.path.join(temp_dir, "*.vtt"))
             if not vtt_files:
-                raise Exception("No subtitles or captions found for this video.")
+                raise Exception("No subtitles or captions found for this video/playlist.")
 
-            vtt_path = vtt_files[0]
-            clean_text = parse_vtt(vtt_path)
+            all_clean_text = []
+            for vtt_path in vtt_files:
+                text = parse_vtt(vtt_path)
+                if text.strip():
+                    all_clean_text.append(text)
+                    
+            clean_text = "\n\n".join(all_clean_text)
 
             if not clean_text.strip():
                 raise Exception("Subtitles download completed but text content was empty.")
 
+            # Limit length of total text to 150,000 characters just in case
+            max_chars = 150000
+            if len(clean_text) > max_chars:
+                clean_text = clean_text[:max_chars] + "\n\n[TEXT TRUNCATED DUE TO LENGTH LIMIT]"
+
             # Create clean txt header metadata
+            source_type = "Playlist" if is_playlist else "Video"
             header = (
-                f"YouTube Video: {video_title}\n"
+                f"YouTube {source_type}: {video_title}\n"
                 f"URL: {url}\n"
-                f"Video ID: {video_id}\n"
+                f"ID: {item_id}\n"
                 f"Indexed At: {datetime.utcnow().isoformat()}\n\n"
             )
             full_content = header + clean_text
 
             # Save the clean text document to disk
-            filename = f"YouTube - {safe_title} ({video_id}).txt"
+            filename = f"YouTube - {safe_title} ({item_id}).txt"
             filepath = os.path.join(user_input_dir, filename)
 
             with open(filepath, "w", encoding="utf-8") as f:
@@ -576,32 +607,40 @@ async def upload_youtube_url(
     user_id: str = "default_tenant"
 ) -> JSONResponse:
     """Validate YouTube URL, register a background job, and queue processing."""
-    video_id = extract_youtube_video_id(url)
-    if not video_id:
+    info = extract_youtube_info(url)
+    if not info:
         raise HTTPException(
             status_code=400,
             detail="Invalid YouTube URL format"
         )
 
+    is_playlist = info["type"] == "playlist"
+    item_id = info["id"]
     job_id = str(uuid.uuid4())
-    # Temporary filename placeholder until we download subtitles and fetch title
-    job = Job(job_id=job_id, filename=f"youtube_{video_id}", user_id=user_id)
+    
+    # Temporary filename placeholder
+    job = Job(job_id=job_id, filename=f"youtube_{item_id}", user_id=user_id)
     job_store[job_id] = job
 
     background_tasks.add_task(
         process_youtube_pipeline,
         url,
-        video_id,
+        item_id,
         job_id,
-        user_id
+        user_id,
+        is_playlist
     )
+
+    warning_msg = "You are uploading a playlist. It may take longer, and we will only index the first 5 videos to ensure efficiency." if is_playlist else None
 
     return JSONResponse(
         status_code=202,
         content={
             "message": "YouTube processing started",
             "job_id": job_id,
-            "filename": f"youtube_{video_id}",
-            "status": job.status.value
+            "filename": f"youtube_{item_id}",
+            "status": job.status.value,
+            "is_playlist": is_playlist,
+            "warning": warning_msg
         }
     )

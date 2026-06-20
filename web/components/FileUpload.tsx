@@ -330,6 +330,10 @@ export default function FileUpload({
 
       const data = await response.json();
       
+      if (data.warning) {
+        alert(data.warning);
+      }
+      
       const taskId = `youtube-${data.job_id || Date.now()}`;
       const newTask: UploadTask = {
         id: taskId,
