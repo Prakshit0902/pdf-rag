@@ -19,3 +19,5 @@ pyjwt[crypto]
 cryptography
 supabase
 yt-dlp
+python-docx
+python-pptx
