@@ -247,8 +247,10 @@ export default function FileUpload({
       
       const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
       const isTxt = file.type === "text/plain" || file.name.endsWith(".txt");
-      if (!isPdf && !isTxt) {
-        alert(`Only PDF and TXT files are allowed. Skipped ${file.name}`);
+      const isDocx = file.name.endsWith(".docx");
+      const isPptx = file.name.endsWith(".pptx");
+      if (!isPdf && !isTxt && !isDocx && !isPptx) {
+        alert(`Only PDF, TXT, DOCX, and PPTX files are allowed. Skipped ${file.name}`);
         continue;
       }
       
@@ -500,7 +502,7 @@ export default function FileUpload({
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.txt"
+            accept=".pdf,.txt,.docx,.pptx"
             multiple
             className="hidden"
             onChange={handleFileChange}
@@ -520,7 +522,7 @@ export default function FileUpload({
                 </svg>
               )}
               <span className="font-semibold text-xs group-hover:text-zinc-200 transition-colors">
-                {mode === "sidebar" ? "Upload PDF / TXT" : "Select PDF / TXT or Drag & Drop"}
+                {mode === "sidebar" ? "Upload PDF / TXT / DOCX / PPTX" : "Select PDF / TXT / DOCX / PPTX or Drag & Drop"}
               </span>
             </div>
             {mode !== "sidebar" && <p className="text-xs text-zinc-600">Max file size 50MB per file</p>}
