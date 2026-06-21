@@ -24,7 +24,7 @@ from app.ingestion.cache import (
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
-ALLOWED_EXTENSIONS = {".pdf", ".txt"}
+ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx", ".pptx"}
 
 
 class JobStatus(str, Enum):
@@ -74,7 +74,7 @@ def validate_file(file: UploadFile) -> None:
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail="Only PDF and TXT files are allowed"
+            detail="Only PDF, TXT, DOCX, and PPTX files are allowed"
         )
 
 
@@ -127,8 +127,13 @@ def process_pdf_pipeline(filename: str, job_id: str, user_id: str, pdf_hash: Opt
         if not os.path.exists(pdf_path):
             raise FileNotFoundError(f"File not found at {pdf_path}")
 
-        # Check if PDF or TXT
-        is_pdf = filename.lower().endswith(".pdf")
+        # Check if PDF or TXT or DOCX or PPTX
+        ext = os.path.splitext(filename)[1].lower()
+        is_pdf = ext == ".pdf"
+        is_txt = ext == ".txt"
+        is_docx = ext == ".docx"
+        is_pptx = ext == ".pptx"
+        
         name_without_ext = os.path.splitext(filename)[0]
 
         if is_pdf:
@@ -166,22 +171,37 @@ def process_pdf_pipeline(filename: str, job_id: str, user_id: str, pdf_hash: Opt
             documents = parse_pdf(pdf_path)
             print(f"[{job_id}] Parsed {len(documents)} document blocks")
         else:
-            # It's a text file
+            # It's a text-based or office file
             image_map = {}
             page_render_map = {}
 
             from llama_index.core import Document
-            with open(pdf_path, "r", encoding="utf-8", errors="ignore") as f:
-                text_content = f.read()
+            
+            text_content = ""
+            if is_txt:
+                with open(pdf_path, "r", encoding="utf-8", errors="ignore") as f:
+                    text_content = f.read()
+            elif is_docx:
+                from app.parsing.parse_office import extract_text_from_docx, extract_images_from_docx
+                text_content = extract_text_from_docx(pdf_path)
+                pdf_image_dir = os.path.join(user_image_dir, name_without_ext)
+                image_map = extract_images_from_docx(pdf_path, pdf_image_dir)
+                print(f"[{job_id}] Extracted {sum(len(v) for v in image_map.values())} images from DOCX")
+            elif is_pptx:
+                from app.parsing.parse_office import extract_text_from_pptx, extract_images_from_pptx
+                text_content = extract_text_from_pptx(pdf_path)
+                pdf_image_dir = os.path.join(user_image_dir, name_without_ext)
+                image_map = extract_images_from_pptx(pdf_path, pdf_image_dir)
+                print(f"[{job_id}] Extracted {sum(len(v) for v in image_map.values())} images from PPTX")
 
             documents = [Document(
                 text=text_content,
                 metadata={
                     "file_path": pdf_path,
-                    "source": "txt",
+                    "source": ext[1:],
                 }
             )]
-            print(f"[{job_id}] Loaded text file directly")
+            print(f"[{job_id}] Loaded {ext} file directly")
 
         # -------------------------
         # Step 4: Build Chunks
@@ -350,7 +370,7 @@ async def list_uploaded_files(user_id: str = "default_tenant") -> JSONResponse:
     os.makedirs(user_input_dir, exist_ok=True)
     files = [
         f for f in os.listdir(user_input_dir)
-        if f.endswith(".pdf") or f.endswith(".txt")
+        if f.endswith(".pdf") or f.endswith(".txt") or f.endswith(".docx") or f.endswith(".pptx")
     ]
     return JSONResponse(content={"files": files})
 
