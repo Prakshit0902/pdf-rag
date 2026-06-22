@@ -6,6 +6,7 @@ import re
 import glob
 import tempfile
 import yt_dlp
+import imageio_ffmpeg
 from datetime import datetime
 from typing import Dict, Optional, Any
 from enum import Enum
@@ -479,7 +480,7 @@ def extract_youtube_info(url: str) -> Optional[Dict[str, str]]:
 
 
 def parse_vtt(vtt_path: str) -> str:
-    """Parses a WebVTT file in pure Python and returns clean plain text without timestamps/metadata."""
+    """Parses a WebVTT file and returns text with aggregated [MM:SS] timestamps."""
     if not os.path.exists(vtt_path):
         return ""
 
@@ -492,7 +493,7 @@ def parse_vtt(vtt_path: str) -> str:
     # Split into blocks (separated by empty lines)
     blocks = content.split("\n\n")
     
-    captions = []
+    raw_cues = []
     for block in blocks:
         lines = block.strip().split("\n")
         # Find the line containing the timestamp
@@ -503,9 +504,19 @@ def parse_vtt(vtt_path: str) -> str:
                 break
         
         if timestamp_idx != -1:
+            start_ts_str = lines[timestamp_idx].split("-->")[0].strip()
+            parts = start_ts_str.split(":")
+            sec = 0.0
+            try:
+                if len(parts) == 3:
+                    sec = int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+                elif len(parts) == 2:
+                    sec = int(parts[0]) * 60 + float(parts[1])
+            except ValueError:
+                pass
+
             # The text lines start after the timestamp
             text_lines = lines[timestamp_idx + 1:]
-            # Clean and join the text lines for this cue
             clean_cue_lines = []
             for line in text_lines:
                 cleaned = re.sub(r'<[^>]+>', '', line).strip()
@@ -513,23 +524,47 @@ def parse_vtt(vtt_path: str) -> str:
                     clean_cue_lines.append(cleaned)
             
             if clean_cue_lines:
-                cue_text = " ".join(clean_cue_lines)
-                captions.append(cue_text)
+                raw_cues.append({
+                    "sec": sec,
+                    "text": " ".join(clean_cue_lines)
+                })
 
     # YouTube auto-captions have overlapping text.
     # If a cue text is a prefix of the next cue text, we skip it.
-    deduplicated = []
-    for i, cap in enumerate(captions):
-        if i < len(captions) - 1:
-            next_cap = captions[i + 1]
-            if next_cap.strip().startswith(cap.strip()):
+    deduped_cues = []
+    for i, cue in enumerate(raw_cues):
+        if i < len(raw_cues) - 1:
+            next_cue = raw_cues[i + 1]
+            if next_cue["text"].strip().startswith(cue["text"].strip()):
                 continue
-        deduplicated.append(cap)
+        deduped_cues.append(cue)
         
-    return " ".join(deduplicated)
+    # Aggregate text with 15-second windows
+    final_blocks = []
+    last_timestamp_sec = -999.0
+    current_block_texts = []
+    
+    for cue in deduped_cues:
+        sec = cue["sec"]
+        if sec - last_timestamp_sec >= 15.0:
+            if current_block_texts:
+                final_blocks.append(" ".join(current_block_texts))
+                current_block_texts = []
+            
+            m = int(sec // 60)
+            s = int(sec % 60)
+            ts_formatted = f"[{m:02d}:{s:02d}]"
+            current_block_texts.append(ts_formatted)
+            last_timestamp_sec = sec
+            
+        current_block_texts.append(cue["text"])
+        
+    if current_block_texts:
+        final_blocks.append(" ".join(current_block_texts))
 
+    return "\n\n".join(final_blocks)
 
-def process_youtube_pipeline(url: str, item_id: str, job_id: str, user_id: str, is_playlist: bool = False) -> None:
+def process_youtube_pipeline(url: str, item_id: str, job_id: str, user_id: str, is_playlist: bool = False, needs_transcription: bool = False, transcribe_duration: Optional[int] = None) -> None:
     """Background task to download YouTube subtitles, save to disk, and index."""
     job = job_store.get(job_id)
     if not job:
@@ -543,44 +578,102 @@ def process_youtube_pipeline(url: str, item_id: str, job_id: str, user_id: str, 
 
         # Download subtitles using yt-dlp into a temporary directory
         with tempfile.TemporaryDirectory() as temp_dir:
-            ydl_opts = {
-                'skip_download': True,
-                'writeautomaticsub': True,
-                'writesubtitles': True,
-                'subtitleslangs': ['en', 'en-US'],
-                'outtmpl': os.path.join(temp_dir, '%(id)s'),
-                'quiet': True,
-                'no_warnings': True,
-                'noplaylist': not is_playlist,
-            }
-            if is_playlist:
-                ydl_opts['playlistend'] = 5  # limit to first 5 videos
+            if not needs_transcription:
+                ydl_opts = {
+                    'skip_download': True,
+                    'writeautomaticsub': True,
+                    'writesubtitles': True,
+                    'subtitleslangs': ['en', 'en-US'],
+                    'outtmpl': os.path.join(temp_dir, '%(id)s'),
+                    'quiet': True,
+                    'no_warnings': True,
+                    'noplaylist': not is_playlist,
+                }
+                if is_playlist:
+                    ydl_opts['playlistend'] = 5  # limit to first 5 videos
 
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                if 'entries' in info:
-                    video_title = info.get('title', f"Playlist_{item_id}")
-                else:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if 'entries' in info:
+                        video_title = info.get('title', f"Playlist_{item_id}")
+                    else:
+                        video_title = info.get('title', item_id)
+                    # Clean up video title for safe filename
+                    safe_title = "".join(c for c in video_title if c.isalnum() or c in " -_").strip()
+                    ydl.download([url])
+
+                # Locate downloaded subtitle file(s)
+                vtt_files = glob.glob(os.path.join(temp_dir, "*.vtt"))
+                if not vtt_files:
+                    raise Exception("No subtitles or captions found for this video/playlist.")
+
+                all_clean_text = []
+                for vtt_path in vtt_files:
+                    text = parse_vtt(vtt_path)
+                    if text.strip():
+                        all_clean_text.append(text)
+                        
+                clean_text = "\n\n".join(all_clean_text)
+
+                if not clean_text.strip():
+                    raise Exception("Subtitles download completed but text content was empty.")
+            else:
+                # Transcription Logic using Groq Whisper API
+                ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+                ydl_opts = {
+                    'format': 'bestaudio/best',
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '192',
+                    }],
+                    'ffmpeg_location': ffmpeg_exe,
+                    'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
+                    'quiet': True,
+                    'no_warnings': True,
+                    'noplaylist': True,
+                }
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
                     video_title = info.get('title', item_id)
-                # Clean up video title for safe filename
-                safe_title = "".join(c for c in video_title if c.isalnum() or c in " -_").strip()
-                ydl.download([url])
+                    safe_title = "".join(c for c in video_title if c.isalnum() or c in " -_").strip()
+                    ydl.download([url])
 
-            # Locate downloaded subtitle file(s)
-            vtt_files = glob.glob(os.path.join(temp_dir, "*.vtt"))
-            if not vtt_files:
-                raise Exception("No subtitles or captions found for this video/playlist.")
+                audio_files = glob.glob(os.path.join(temp_dir, "*.mp3"))
+                if not audio_files:
+                    raise Exception("Failed to download audio for transcription.")
+                audio_path = audio_files[0]
 
-            all_clean_text = []
-            for vtt_path in vtt_files:
-                text = parse_vtt(vtt_path)
-                if text.strip():
+                # Limit audio to specified duration if needed
+                if transcribe_duration:
+                    short_audio_path = os.path.join(temp_dir, "short_audio.mp3")
+                    import subprocess
+                    subprocess.run([
+                        ffmpeg_exe, "-y", "-i", audio_path, "-t", str(transcribe_duration),
+                        "-c", "copy", short_audio_path
+                    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    audio_path = short_audio_path
+
+                # Split audio into ~10 minute chunks to stay within API limit (~25MB)
+                import subprocess
+                subprocess.run([
+                    ffmpeg_exe, "-y", "-i", audio_path, "-f", "segment", "-segment_time", "600",
+                    "-c", "copy", os.path.join(temp_dir, "chunk_%03d.mp3")
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                chunk_files = sorted(glob.glob(os.path.join(temp_dir, "chunk_*.mp3")))
+                if not chunk_files:
+                    raise Exception("Failed to split audio into chunks.")
+
+                from app.api.groq_whisper import transcribe_audio
+                all_clean_text = []
+                for chunk_file in chunk_files:
+                    text = transcribe_audio(chunk_file)
                     all_clean_text.append(text)
-                    
-            clean_text = "\n\n".join(all_clean_text)
 
-            if not clean_text.strip():
-                raise Exception("Subtitles download completed but text content was empty.")
+                clean_text = " ".join(all_clean_text)
+                if not clean_text.strip():
+                    raise Exception("Transcription completed but text content was empty.")
 
             # Limit length of total text to 150,000 characters just in case
             max_chars = 150000
@@ -637,7 +730,47 @@ async def upload_youtube_url(
     is_playlist = info["type"] == "playlist"
     item_id = info["id"]
     job_id = str(uuid.uuid4())
-    
+    needs_transcription = False
+    warning_msg = None
+    transcribe_duration = None
+
+    # Synchronous check for subtitles
+    with yt_dlp.YoutubeDL({'quiet': True, 'noplaylist': not is_playlist, 'playlistend': 1}) as ydl:
+        try:
+            info_dict = ydl.extract_info(url, download=False)
+            if is_playlist and 'entries' in info_dict and info_dict['entries']:
+                # check the first video for a playlist
+                first_video = info_dict['entries'][0]
+                subs = first_video.get('subtitles', {})
+                auto_subs = first_video.get('automatic_captions', {})
+            else:
+                subs = info_dict.get('subtitles', {})
+                auto_subs = info_dict.get('automatic_captions', {})
+            
+            has_en_subs = any(lang.startswith('en') for lang in list(subs.keys()) + list(auto_subs.keys()))
+            
+            if not has_en_subs:
+                if is_playlist:
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            "message": "This playlist does not have English subtitles. We currently cannot process playlists without subtitles.",
+                            "status": "failed",
+                            "is_playlist": True
+                        }
+                    )
+                else:
+                    needs_transcription = True
+                    duration = info_dict.get('duration', 0)
+                    if duration > 1800: # 30 minutes
+                        warning_msg = "No subtitles found. Video is longer than 30 minutes, so only the first 30 minutes will be transcribed."
+                        transcribe_duration = 1800
+                    else:
+                        warning_msg = "No subtitles found. We are downloading and transcribing the audio, which may take some time."
+        except Exception as e:
+            needs_transcription = True
+            warning_msg = "Could not check subtitles. Will attempt to transcribe audio if needed."
+
     # Temporary filename placeholder
     job = Job(job_id=job_id, filename=f"youtube_{item_id}", user_id=user_id)
     job_store[job_id] = job
@@ -648,19 +781,22 @@ async def upload_youtube_url(
         item_id,
         job_id,
         user_id,
-        is_playlist
+        is_playlist,
+        needs_transcription,
+        transcribe_duration
     )
 
-    warning_msg = "You are uploading a playlist. It may take longer, and we will only index the first 5 videos to ensure efficiency." if is_playlist else None
+    if is_playlist and not needs_transcription:
+        warning_msg = "You are uploading a playlist. It may take longer, and we will only index the first 5 videos to ensure efficiency."
 
     return JSONResponse(
         status_code=202,
         content={
-            "message": "YouTube processing started",
+            "message": warning_msg if warning_msg else "YouTube processing started",
             "job_id": job_id,
             "filename": f"youtube_{item_id}",
             "status": job.status.value,
             "is_playlist": is_playlist,
-            "warning": warning_msg
+            "needs_transcription": needs_transcription
         }
     )
