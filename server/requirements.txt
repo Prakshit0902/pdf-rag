@@ -21,3 +21,4 @@ supabase
 yt-dlp
 python-docx
 python-pptx
+imageio-ffmpeg
