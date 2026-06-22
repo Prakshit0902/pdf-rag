@@ -130,6 +130,9 @@ CONTEXT:
 
 Provide a well-formatted answer in markdown. List sources at the end as:
 **Sources:** [file.pdf, page X], [file2.pdf, page Y]
+
+If you quote or reference a YouTube video, include the exact timestamp in the format [MM:SS] as a citation, like:
+**Sources:** [YouTube - Title (ID).txt, 12:34]
 """
 
         async for token in stream_answer_async(
