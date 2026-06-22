@@ -199,6 +199,16 @@ export default function PdfViewerPanel({ citation, onClose }: PdfViewerPanelProp
                 className="w-full h-full border-none bg-[#525659]"
                 title={`PDF Viewer - ${citation.source}`}
               />
+            ) : citation.source.startsWith("YouTube -") ? (
+              /* YouTube Iframe viewer */
+              <iframe
+                key={`${citation.source}-${currentPage}-${retryKey}`}
+                src={`https://www.youtube.com/embed/${citation.source.match(/\((.{11})\)\.txt/)?.[1] || ""}?start=${currentPage}&autoplay=1`}
+                className="w-full h-full border-none bg-black"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                title={`YouTube Viewer - ${citation.source}`}
+              />
             ) : txtContent ? (
               /* Plain Text Viewer */
               <div className="w-full h-full overflow-y-auto p-8 bg-[#18181b] text-zinc-300 font-mono text-sm leading-relaxed whitespace-pre-wrap select-text">

@@ -43,7 +43,7 @@ function extractAnswerBody(content: string): string {
  * <button> elements carrying data-attributes the container can delegate to.
  */
 function injectCitationButtons(html: string): string {
-  return html.replace(
+  let result = html.replace(
     /\[([^\]]+?\.pdf),\s*[Pp]age\s*(\d+)\]/g,
     (_match, source, page) => {
       const shortName = source.split(".")[0].slice(0, 14);
@@ -55,6 +55,24 @@ function injectCitationButtons(html: string): string {
       >${shortName}… p.${page}</button>`;
     }
   );
+
+  result = result.replace(
+    /\[([^\]]+?(?:\.txt)?),\s*(?:[Pp]age\s*)?\[?(\d{1,2}:\d{2}(?::\d{2})?)\]?\]/g,
+    (_match, source, timestamp) => {
+      if (!source.endsWith(".txt")) {
+          source = source + ".txt";
+      }
+      const shortName = source.split(".")[0].slice(0, 14);
+      return `<button
+        class="citation-badge"
+        data-source="${source.trim()}"
+        data-timestamp="${timestamp}"
+        title="Open ${source.trim()}, time ${timestamp}"
+      >${shortName}… @ ${timestamp}</button>`;
+    }
+  );
+
+  return result;
 }
 
 export default function MarkdownRenderer({
@@ -89,7 +107,20 @@ export default function MarkdownRenderer({
       if (!target || !onCitationClick) return;
 
       const source = target.dataset.source || "";
-      const page = parseInt(target.dataset.page || "1", 10);
+      const pageStr = target.dataset.page;
+      const tsStr = target.dataset.timestamp;
+
+      let page = 1;
+      if (tsStr) {
+        const parts = tsStr.split(":").map(Number);
+        if (parts.length === 2) {
+          page = parts[0] * 60 + parts[1];
+        } else if (parts.length === 3) {
+          page = parts[0] * 3600 + parts[1] * 60 + parts[2];
+        }
+      } else if (pageStr) {
+        page = parseInt(pageStr, 10);
+      }
 
       // Extract the answer body as context for the viewer's text excerpt
       const chunkText = extractAnswerBody(content).slice(-600).trim();
