@@ -21,6 +21,13 @@ def _get_client():
         return genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
+class GenAIClientProxy:
+    def __getattr__(self, name):
+        return getattr(_get_client(), name)
+
+client = GenAIClientProxy()
+
+
 def generate_answer(
     prompt: str,
     image_paths: list = None
