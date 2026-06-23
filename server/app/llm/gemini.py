@@ -7,19 +7,25 @@ from google import genai
 from google.genai import types
 
 
-load_dotenv()
+import asyncio
 
+_client_cache = {}
 
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+def _get_client():
+    try:
+        loop = asyncio.get_running_loop()
+        if loop not in _client_cache:
+            _client_cache[loop] = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        return _client_cache[loop]
+    except RuntimeError:
+        return genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 def generate_answer(
     prompt: str,
     image_paths: list = None
 ):
-
+    client = _get_client()
     contents = [prompt]
 
     if image_paths:
@@ -53,7 +59,7 @@ def stream_answer(
     prompt: str,
     image_paths: list = None
 ):
-
+    client = _get_client()
     contents = [prompt]
 
     if image_paths:
@@ -91,6 +97,7 @@ async def generate_answer_async(
     prompt: str,
     image_paths: list = None
 ):
+    client = _get_client()
     contents = [prompt]
 
     if image_paths:
@@ -117,6 +124,7 @@ async def stream_answer_async(
     prompt: str,
     image_paths: list = None
 ):
+    client = _get_client()
     contents = [prompt]
 
     if image_paths:

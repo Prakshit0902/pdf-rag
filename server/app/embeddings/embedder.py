@@ -10,9 +10,16 @@ load_dotenv()
 
 MODEL_NAME = "gemini-embedding-2"
 
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+_client_cache = {}
+
+def _get_client():
+    try:
+        loop = asyncio.get_running_loop()
+        if loop not in _client_cache:
+            _client_cache[loop] = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        return _client_cache[loop]
+    except RuntimeError:
+        return genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 def normalize_vector(vector: list[float]) -> list[float]:
@@ -23,6 +30,7 @@ def normalize_vector(vector: list[float]) -> list[float]:
 
 
 def get_embedding(text: str, task_type: str = "RETRIEVAL_QUERY"):
+    client = _get_client()
     result = client.models.embed_content(
         model=MODEL_NAME,
         contents=text,
@@ -43,6 +51,7 @@ def get_embeddings_batch(
     # Wrap each text in a Content object to prevent the SDK from
     # concatenating consecutive strings into a single Content's Parts.
     content_list = [types.Content(parts=[types.Part.from_text(text=t)]) for t in texts]
+    client = _get_client()
     for attempt in range(retries):
         try:
             result = client.models.embed_content(
@@ -63,6 +72,7 @@ def get_embeddings_batch(
 
 
 async def get_embedding_async(text: str, task_type: str = "RETRIEVAL_QUERY"):
+    client = _get_client()
     result = await client.aio.models.embed_content(
         model=MODEL_NAME,
         contents=text,
@@ -81,6 +91,7 @@ async def get_embeddings_batch_async(
     delay: float = 2.0
 ) -> list[list[float]]:
     content_list = [types.Content(parts=[types.Part.from_text(text=t)]) for t in texts]
+    client = _get_client()
     for attempt in range(retries):
         try:
             result = await client.aio.models.embed_content(
