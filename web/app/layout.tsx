@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nexus RAG | Enterprise Isolated PDF Intelligence Workspace",
+  title: "Omni RAG | Enterprise Isolated PDF Intelligence Workspace",
   description: "Sovereign tenant-isolated document analysis, vector search, and reranking powered by Google Gemini, Qdrant, and Jina AI.",
 };
 
@@ -24,9 +24,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider afterSignOutUrl="/">
       <html
         lang="en"
+        suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       >
         <head>
