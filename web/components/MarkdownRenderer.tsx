@@ -143,18 +143,18 @@ export default function MarkdownRenderer({
           padding: 2px 7px;
           margin: 0 2px;
           border-radius: 999px;
-          background: rgba(99, 102, 241, 0.15);
-          color: #a5b4fc;
-          border: 1px solid rgba(99, 102, 241, 0.35);
+          background: var(--accent-soft);
+          color: var(--accent);
+          border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
           cursor: pointer;
           vertical-align: middle;
           transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
           white-space: nowrap;
         }
         .markdown-content .citation-badge:hover {
-          background: rgba(99, 102, 241, 0.32);
-          border-color: rgba(99, 102, 241, 0.6);
-          color: #c7d2fe;
+          background: color-mix(in oklab, var(--accent) 22%, transparent);
+          border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+          color: var(--accent-strong);
           transform: translateY(-1px);
         }
         .markdown-content .citation-badge:active {
@@ -168,18 +168,18 @@ export default function MarkdownRenderer({
         .markdown-content p { margin-bottom: 0.6em; }
         .markdown-content ul, .markdown-content ol { padding-left: 1.2em; margin-bottom: 0.6em; }
         .markdown-content li { margin-bottom: 0.25em; }
-        .markdown-content strong { color: #e4e4e7; font-weight: 700; }
-        .markdown-content code { background: rgba(99,102,241,0.12); padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
-        .markdown-content pre { background: #09090b; border: 1px solid #27272a; border-radius: 8px; padding: 0.75em 1em; margin: 0.5em 0; overflow-x: auto; }
-        .markdown-content pre code { background: transparent; padding: 0; }
-        .markdown-content h1, .markdown-content h2, .markdown-content h3 { color: #f4f4f5; font-weight: 700; margin: 0.8em 0 0.4em; }
-        .markdown-content blockquote { border-left: 2px solid #52525b; padding-left: 0.75em; color: #a1a1aa; margin: 0.5em 0; }
-        .markdown-content a { color: #818cf8; text-decoration: underline; }
+        .markdown-content strong { color: var(--foreground); font-weight: 700; }
+        .markdown-content code { background: var(--accent-soft); color: var(--accent-strong); padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+        .markdown-content pre { background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 0.75em 1em; margin: 0.5em 0; overflow-x: auto; }
+        .markdown-content pre code { background: transparent; color: var(--foreground); padding: 0; }
+        .markdown-content h1, .markdown-content h2, .markdown-content h3 { color: var(--foreground); font-weight: 700; margin: 0.8em 0 0.4em; }
+        .markdown-content blockquote { border-left: 2px solid var(--accent); padding-left: 0.75em; color: var(--muted); margin: 0.5em 0; }
+        .markdown-content a { color: var(--accent); text-decoration: underline; }
         .is-streaming .markdown-content::after {
           content: "▋";
           display: inline-block;
           animation: blink 0.8s step-end infinite;
-          color: #6366f1;
+          color: var(--accent);
           font-size: 0.75em;
           vertical-align: text-bottom;
           margin-left: 2px;
@@ -189,7 +189,7 @@ export default function MarkdownRenderer({
 
       <div
         ref={containerRef}
-        className={`markdown-content text-[12px] sm:text-xs text-zinc-300 leading-relaxed ${
+        className={`markdown-content text-[12px] sm:text-xs text-foreground leading-relaxed ${
           isStreaming ? "is-streaming" : ""
         }`}
         dangerouslySetInnerHTML={{ __html: html }}
