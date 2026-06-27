@@ -588,6 +588,12 @@ def process_youtube_pipeline(url: str, item_id: str, job_id: str, user_id: str, 
                     'quiet': True,
                     'no_warnings': True,
                     'noplaylist': not is_playlist,
+                    'nocheckcertificate': True,
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['android', 'web']
+                        }
+                    },
                 }
                 if is_playlist:
                     ydl_opts['playlistend'] = 5  # limit to first 5 videos
@@ -632,6 +638,12 @@ def process_youtube_pipeline(url: str, item_id: str, job_id: str, user_id: str, 
                     'quiet': True,
                     'no_warnings': True,
                     'noplaylist': True,
+                    'nocheckcertificate': True,
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['android', 'web']
+                        }
+                    },
                 }
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=False)
@@ -735,7 +747,18 @@ async def upload_youtube_url(
     transcribe_duration = None
 
     # Synchronous check for subtitles
-    with yt_dlp.YoutubeDL({'quiet': True, 'noplaylist': not is_playlist, 'playlistend': 1}) as ydl:
+    ydl_opts = {
+        'quiet': True,
+        'noplaylist': not is_playlist,
+        'playlistend': 1,
+        'nocheckcertificate': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web']
+            }
+        },
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
             info_dict = ydl.extract_info(url, download=False)
             if is_playlist and 'entries' in info_dict and info_dict['entries']:
