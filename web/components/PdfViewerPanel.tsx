@@ -119,7 +119,7 @@ export default function PdfViewerPanel({ citation, onClose }: PdfViewerPanelProp
     <div
       className={`
         flex-shrink-0 flex flex-col h-full relative
-        bg-[#323639] border-l border-zinc-800/80
+        bg-[#323639] border-l border-border-subtle
         transition-all duration-300 ease-in-out overflow-hidden
         ${
           isOpen
@@ -137,7 +137,7 @@ export default function PdfViewerPanel({ citation, onClose }: PdfViewerPanelProp
               {/* File Icon */}
               <div className="w-7 h-7 rounded bg-[#202224] flex items-center justify-center flex-shrink-0 border border-zinc-700/30">
                 {citation.source.toLowerCase().endsWith(".txt") ? (
-                  <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 ) : (
@@ -186,7 +186,7 @@ export default function PdfViewerPanel({ citation, onClose }: PdfViewerPanelProp
                 </div>
                 <button
                   onClick={() => setRetryKey((k) => k + 1)}
-                  className="text-xs px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-md transition-all cursor-pointer"
+                  className="text-xs px-4 py-2 rounded-xl bg-accent hover:bg-accent-strong text-accent-foreground font-semibold shadow-md transition-all cursor-pointer"
                 >
                   Try Again
                 </button>
