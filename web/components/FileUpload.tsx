@@ -433,11 +433,11 @@ export default function FileUpload({
   };
 
   return (
-    <div className={`w-full ${mode === "sidebar" ? "space-y-3" : "bg-zinc-900/40 backdrop-blur-md rounded-2xl p-6 border border-zinc-800/80 shadow-xl space-y-5"}`}>
+    <div className={`w-full ${mode === "sidebar" ? "space-y-3" : "bg-surface backdrop-blur-md rounded-2xl p-6 border border-border-subtle shadow-xl space-y-5"}`}>
       {mode === "sidebar" ? (
         <div className="flex items-center justify-between">
-          <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
-            <svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <h3 className="text-[10px] font-bold text-muted uppercase tracking-wider flex items-center gap-2">
+            <svg className="w-3.5 h-3.5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
             Workspace Documents
@@ -445,24 +445,24 @@ export default function FileUpload({
         </div>
       ) : (
         <div>
-          <h2 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
-            <svg className="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <svg className="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
             Documents
           </h2>
-          <p className="text-zinc-500 text-xs mt-1">Upload files to populate your knowledge base.</p>
+          <p className="text-muted text-xs mt-1">Upload files to populate your knowledge base.</p>
         </div>
       )}
 
       {/* Tabs Menu */}
-      <div className="flex border-b border-zinc-800/80 text-[11px] font-semibold">
+      <div className="flex border-b border-border-subtle text-[11px] font-semibold">
         <button
           onClick={() => setActiveTab("files")}
           className={`flex-1 pb-1.5 text-center border-b-2 transition-all cursor-pointer ${
             activeTab === "files"
-              ? "border-indigo-500 text-zinc-200"
-              : "border-transparent text-zinc-500 hover:text-zinc-300"
+              ? "border-accent text-foreground"
+              : "border-transparent text-muted hover:text-foreground"
           }`}
         >
           Files
@@ -471,8 +471,8 @@ export default function FileUpload({
           onClick={() => setActiveTab("paste")}
           className={`flex-1 pb-1.5 text-center border-b-2 transition-all cursor-pointer ${
             activeTab === "paste"
-              ? "border-indigo-500 text-zinc-200"
-              : "border-transparent text-zinc-500 hover:text-zinc-300"
+              ? "border-accent text-foreground"
+              : "border-transparent text-muted hover:text-foreground"
           }`}
         >
           Paste Text
@@ -481,8 +481,8 @@ export default function FileUpload({
           onClick={() => setActiveTab("youtube")}
           className={`flex-1 pb-1.5 text-center border-b-2 transition-all cursor-pointer ${
             activeTab === "youtube"
-              ? "border-indigo-500 text-zinc-200"
-              : "border-transparent text-zinc-500 hover:text-zinc-300"
+              ? "border-accent text-foreground"
+              : "border-transparent text-muted hover:text-foreground"
           }`}
         >
           YouTube
@@ -492,7 +492,7 @@ export default function FileUpload({
       {/* Tab Contents */}
       {activeTab === "files" && (
         <div
-          className={`border border-dashed border-zinc-800 rounded-xl text-center cursor-pointer hover:border-zinc-700 hover:bg-zinc-900/20 transition-all duration-300 group ${
+          className={`border border-dashed border-border-subtle rounded-xl text-center cursor-pointer hover:border-accent/50 hover:bg-accent-soft/40 transition-all duration-300 group ${
             mode === "sidebar" ? "p-4" : "p-8"
           }`}
           onClick={() => fileInputRef.current?.click()}
@@ -509,42 +509,42 @@ export default function FileUpload({
           />
           <div className="space-y-2">
             {mode !== "sidebar" && (
-              <div className="w-12 h-12 rounded-xl bg-zinc-950 flex items-center justify-center mx-auto border border-zinc-900 group-hover:border-indigo-500/30 group-hover:bg-indigo-950/20 transition-all duration-300">
-                <svg className="w-6 h-6 text-zinc-500 group-hover:text-indigo-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-12 h-12 rounded-xl bg-surface-2 flex items-center justify-center mx-auto border border-border-subtle group-hover:border-accent/40 group-hover:bg-accent-soft transition-all duration-300">
+                <svg className="w-6 h-6 text-muted group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               </div>
             )}
-            <div className="text-zinc-400 flex items-center justify-center gap-2">
+            <div className="text-muted flex items-center justify-center gap-2">
               {mode === "sidebar" && (
-                <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               )}
-              <span className="font-semibold text-xs group-hover:text-zinc-200 transition-colors">
+              <span className="font-semibold text-xs group-hover:text-foreground transition-colors">
                 {mode === "sidebar" ? "Upload PDF / TXT / DOCX / PPTX" : "Select PDF / TXT / DOCX / PPTX or Drag & Drop"}
               </span>
             </div>
-            {mode !== "sidebar" && <p className="text-xs text-zinc-600">Max file size 50MB per file</p>}
+            {mode !== "sidebar" && <p className="text-xs text-muted/70">Max file size 50MB per file</p>}
           </div>
         </div>
       )}
 
       {activeTab === "paste" && (
-        <div className="space-y-2 bg-zinc-950/10 p-1 rounded-xl">
+        <div className="space-y-2 bg-surface-2/40 p-1 rounded-xl">
           <input
             type="text"
             placeholder="Document Title (e.g. notes.txt)"
             value={pasteTitle}
             onChange={(e) => setPasteTitle(e.target.value)}
-            className="w-full px-3 py-2 bg-zinc-950/65 border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500 text-xs text-zinc-200 placeholder-zinc-600 transition-all"
+            className="w-full px-3 py-2 bg-surface-2 border border-border-subtle rounded-xl focus:outline-none focus:ring-1 focus:ring-accent/50 focus:border-accent text-xs text-foreground placeholder-muted transition-all"
           />
           <textarea
             placeholder="Paste your text context here..."
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
             rows={mode === "sidebar" ? 4 : 6}
-            className="w-full px-3 py-2 bg-zinc-950/65 border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500 text-xs text-zinc-200 placeholder-zinc-600 resize-none font-sans transition-all"
+            className="w-full px-3 py-2 bg-surface-2 border border-border-subtle rounded-xl focus:outline-none focus:ring-1 focus:ring-accent/50 focus:border-accent text-xs text-foreground placeholder-muted resize-none font-sans transition-all"
           />
           <button
             onClick={() => {
@@ -553,7 +553,7 @@ export default function FileUpload({
               setPasteText("");
             }}
             disabled={!pasteTitle.trim() || !pasteText.trim()}
-            className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800/80 text-white disabled:text-zinc-500 rounded-xl text-xs font-bold shadow-md disabled:shadow-none hover:shadow-[0_0_12px_rgba(99,102,241,0.25)] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            className="w-full py-2 bg-foreground hover:opacity-90 disabled:bg-surface-2 text-background disabled:text-muted rounded-xl text-xs font-bold shadow-md disabled:shadow-none disabled:opacity-60 transition-all cursor-pointer flex items-center justify-center gap-1.5"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -564,7 +564,7 @@ export default function FileUpload({
       )}
 
       {activeTab === "youtube" && (
-        <div className="space-y-3 p-3 bg-zinc-950/20 border border-zinc-800/40 rounded-xl">
+        <div className="space-y-3 p-3 bg-surface-2/40 border border-border-subtle rounded-xl">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
               <svg className="w-4 h-4 text-rose-500 fill-current" viewBox="0 0 24 24">
@@ -572,8 +572,8 @@ export default function FileUpload({
               </svg>
             </div>
             <div className="min-w-0">
-              <h4 className="text-xs font-semibold text-zinc-300">YouTube Indexer</h4>
-              <p className="text-[10px] text-zinc-500 truncate">Extract transcripts and index videos.</p>
+              <h4 className="text-xs font-semibold text-foreground">YouTube Indexer</h4>
+              <p className="text-[10px] text-muted truncate">Extract transcripts and index videos.</p>
             </div>
           </div>
           
@@ -583,17 +583,17 @@ export default function FileUpload({
             onChange={(e) => setYtUrl(e.target.value)}
             disabled={isSubmittingYt}
             placeholder="YouTube Video URL (e.g. https://youtu.be/...)"
-            className="w-full px-3 py-2 bg-zinc-950/65 border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-rose-500/50 focus:border-rose-500 text-xs text-zinc-200 placeholder-zinc-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 bg-surface-2 border border-border-subtle rounded-xl focus:outline-none focus:ring-1 focus:ring-rose-500/50 focus:border-rose-500 text-xs text-foreground placeholder-muted transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           />
           
           <button
             onClick={() => handleYoutubeSubmit(ytUrl)}
             disabled={isSubmittingYt || !ytUrl.trim()}
-            className="w-full py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-zinc-800/80 text-white disabled:text-zinc-500 rounded-xl text-xs font-bold shadow-md disabled:shadow-none hover:shadow-[0_0_12px_rgba(244,63,94,0.25)] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            className="w-full py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-surface-2 text-white disabled:text-muted rounded-xl text-xs font-bold shadow-md disabled:shadow-none hover:shadow-[0_0_12px_rgba(244,63,94,0.25)] transition-all cursor-pointer flex items-center justify-center gap-1.5"
           >
             {isSubmittingYt ? (
               <>
-                <svg className="animate-spin h-3.5 w-3.5 text-zinc-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <svg className="animate-spin h-3.5 w-3.5 text-white/80" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
@@ -613,32 +613,32 @@ export default function FileUpload({
 
       {/* Upload Tasks Queue List */}
       {uploadTasks.length > 0 && (
-        <div className="space-y-2 bg-zinc-950/20 p-3 rounded-xl border border-zinc-800/40">
+        <div className="space-y-2 bg-surface-2/40 p-3 rounded-xl border border-border-subtle">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-muted uppercase tracking-wider">
               Upload Queue ({uploadTasks.filter(t => t.status === "completed").length}/{uploadTasks.length})
             </span>
             <button
               onClick={clearAllTasks}
-              className="text-[9px] font-semibold text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+              className="text-[9px] font-semibold text-muted hover:text-foreground transition-colors cursor-pointer"
             >
               Clear All
             </button>
           </div>
-          <div className="space-y-2 max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
             {uploadTasks.map((task) => (
-              <div key={task.id} className="p-2.5 bg-zinc-950/60 border border-zinc-900 rounded-xl space-y-2 relative">
+              <div key={task.id} className="p-2.5 bg-surface border border-border-subtle rounded-xl space-y-2 relative">
                 <div className="flex items-center justify-between gap-2 min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
-                    <svg className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-3.5 h-3.5 text-accent flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <span className="text-[11px] text-zinc-200 font-semibold truncate">{task.filename}</span>
+                    <span className="text-[11px] text-foreground font-semibold truncate">{task.filename}</span>
                   </div>
                   
                   <button
                     onClick={() => clearTask(task.id)}
-                    className="text-zinc-500 hover:text-zinc-300 w-4 h-4 rounded hover:bg-zinc-900 flex items-center justify-center transition-colors cursor-pointer"
+                    className="text-muted hover:text-foreground w-4 h-4 rounded hover:bg-surface-2 flex items-center justify-center transition-colors cursor-pointer"
                     title="Remove"
                   >
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -649,10 +649,10 @@ export default function FileUpload({
 
                 <div className="flex items-center justify-between text-[9px] font-medium">
                   <span className={`font-semibold ${
-                    task.status === "completed" ? "text-emerald-400" :
-                    task.status === "failed" ? "text-rose-400" :
-                    task.status === "uploading" ? "text-indigo-400" :
-                    task.status === "processing" ? "text-amber-400" : "text-zinc-500"
+                    task.status === "completed" ? "text-emerald-500" :
+                    task.status === "failed" ? "text-rose-500" :
+                    task.status === "uploading" ? "text-accent" :
+                    task.status === "processing" ? "text-amber-500" : "text-muted"
                   }`}>
                     {task.status === "completed" && "Index ready"}
                     {task.status === "failed" && "Failed"}
@@ -660,23 +660,23 @@ export default function FileUpload({
                     {task.status === "processing" && "Parsing & indexing..."}
                     {task.status === "queued" && "Queued"}
                   </span>
-                  <span className="text-zinc-500">{task.progress}%</span>
+                  <span className="text-muted">{task.progress}%</span>
                 </div>
 
-                <div className="w-full bg-zinc-950 rounded-full h-1 overflow-hidden">
+                <div className="w-full bg-surface-2 rounded-full h-1 overflow-hidden">
                   <div
                     className={`h-1 rounded-full transition-all duration-350 ${
                       task.status === "completed" ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" :
                       task.status === "failed" ? "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]" :
-                      task.status === "uploading" ? "bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)] animate-pulse" :
-                      task.status === "processing" ? "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)] animate-pulse" : "bg-zinc-800"
+                      task.status === "uploading" ? "bg-accent shadow-[0_0_10px_var(--accent-glow)] animate-pulse" :
+                      task.status === "processing" ? "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)] animate-pulse" : "bg-surface-2"
                     }`}
                     style={{ width: `${task.progress}%` }}
                   />
                 </div>
 
                 {task.error && (
-                  <p className="text-[9px] text-rose-400 leading-tight bg-rose-950/20 border border-rose-900/30 p-1.5 rounded-lg">
+                  <p className="text-[9px] text-rose-500 leading-tight bg-rose-500/10 border border-rose-500/20 p-1.5 rounded-lg">
                     {task.error}
                   </p>
                 )}
@@ -687,21 +687,21 @@ export default function FileUpload({
       )}
 
       {/* Uploaded files catalog */}
-      <div className={mode === "sidebar" ? "border-t border-zinc-900 pt-3" : "border-t border-zinc-900 pt-6"}>
+      <div className={mode === "sidebar" ? "border-t border-border-subtle pt-3" : "border-t border-border-subtle pt-6"}>
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Workspace Index Files</h4>
+          <h4 className="text-[10px] font-bold text-muted uppercase tracking-wider">Workspace Index Files</h4>
           {uploadedFiles.length > 0 && (
             <div className="flex items-center gap-1.5">
               <button
                 onClick={handleSelectAll}
-                className="text-[9px] text-indigo-400 hover:text-indigo-300 font-bold transition-colors cursor-pointer"
+                className="text-[9px] text-accent hover:text-accent-strong font-bold transition-colors cursor-pointer"
               >
                 All
               </button>
-              <span className="text-zinc-800 text-[8px] font-bold">|</span>
+              <span className="text-border-subtle text-[8px] font-bold">|</span>
               <button
                 onClick={handleDeselectAll}
-                className="text-[9px] text-zinc-500 hover:text-zinc-300 font-bold transition-colors cursor-pointer"
+                className="text-[9px] text-muted hover:text-foreground font-bold transition-colors cursor-pointer"
               >
                 None
               </button>
@@ -709,11 +709,11 @@ export default function FileUpload({
           )}
         </div>
         {isLoadingFiles ? (
-          <div className="text-zinc-600 text-xs py-1">Loading files...</div>
+          <div className="text-muted text-xs py-1">Loading files...</div>
         ) : uploadedFiles.length === 0 ? (
-          <p className="text-zinc-600 text-xs italic">No documents indexed.</p>
+          <p className="text-muted text-xs italic">No documents indexed.</p>
         ) : (
-          <div className={`${mode === "sidebar" ? "max-h-36" : "max-h-48"} overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent`}>
+          <div className={`${mode === "sidebar" ? "max-h-36" : "max-h-48"} overflow-y-auto space-y-1.5 pr-1`}>
             {uploadedFiles.map((file, idx) => {
               const isSelected = selectedFiles.includes(file);
               return (
@@ -722,29 +722,29 @@ export default function FileUpload({
                   onClick={() => handleToggleFile(file)}
                   className={`flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer border ${
                     isSelected
-                      ? "bg-indigo-950/15 hover:bg-indigo-950/25 border-indigo-500/20"
-                      : "bg-zinc-950/10 hover:bg-zinc-950/25 border-zinc-900/60 opacity-60 hover:opacity-85"
+                      ? "bg-accent-soft hover:bg-accent-soft border-accent/25"
+                      : "bg-surface-2/40 hover:bg-surface-2 border-border-subtle opacity-70 hover:opacity-100"
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className={`w-4 h-4 rounded flex items-center justify-center border transition-all ${
                       isSelected
-                        ? "bg-indigo-600 border-indigo-500 text-white shadow-[0_0_8px_rgba(99,102,241,0.4)]"
-                        : "border-zinc-700 bg-transparent text-transparent"
+                        ? "bg-accent border-accent text-accent-foreground shadow-[0_0_8px_var(--accent-glow)]"
+                        : "border-border-subtle bg-transparent text-transparent"
                     }`}>
                       <svg className="w-2.5 h-2.5 animate-fade-in" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                     </div>
-                    <span className={`text-[11px] font-medium truncate ${isSelected ? "text-zinc-200" : "text-zinc-400"}`}>
+                    <span className={`text-[11px] font-medium truncate ${isSelected ? "text-foreground" : "text-muted"}`}>
                       {file}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold border transition-all ${
                       isSelected
-                        ? "text-emerald-400 bg-emerald-950/20 border-emerald-900/30"
-                        : "text-zinc-500 bg-zinc-950/40 border-zinc-900"
+                        ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20"
+                        : "text-muted bg-surface-2 border-border-subtle"
                     }`}>
                       {isSelected ? "Active" : "Scoped"}
                     </span>
@@ -755,7 +755,7 @@ export default function FileUpload({
                           e.stopPropagation();
                           onFileClick(file);
                         }}
-                        className="text-zinc-500 hover:text-indigo-400 w-5 h-5 rounded hover:bg-indigo-950/30 flex items-center justify-center transition-colors cursor-pointer"
+                        className="text-muted hover:text-accent w-5 h-5 rounded hover:bg-accent-soft flex items-center justify-center transition-colors cursor-pointer"
                         title="Preview PDF"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -769,7 +769,7 @@ export default function FileUpload({
                         e.stopPropagation();
                         handleDeleteFile(file);
                       }}
-                      className="text-zinc-500 hover:text-rose-400 w-5 h-5 rounded hover:bg-zinc-900/50 flex items-center justify-center transition-colors cursor-pointer"
+                      className="text-muted hover:text-rose-500 w-5 h-5 rounded hover:bg-rose-500/10 flex items-center justify-center transition-colors cursor-pointer"
                       title="Delete document"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
